@@ -20,7 +20,6 @@ NPRED = 4 * 6
 # duplicates
 PRUNE_THRESHOLD = 12
 
-
 # Avoid using k-NN items within this timedelta of the target, for validation
 # and data leakage issues
 VALIDATION_CLOSENESS_THROWOUT = timedelta(days=27)
@@ -138,7 +137,6 @@ def prune_inds(distances, inds):
     """
     distances_pruned = []
     inds_pruned = []
-    threshold = PRUNE_THRESHOLD
 
     for d, ind in zip(distances, inds):
         if all(abs(ind - i) > PRUNE_THRESHOLD for i in inds_pruned):
