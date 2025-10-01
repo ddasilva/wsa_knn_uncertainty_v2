@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import timedelta
+import os
 
 import numpy as np
 import pandas as pd
@@ -47,6 +48,11 @@ class KnnUncertaintyDataset:
             f"{input_map.upper()}/R{real:03d}/"
             f"{input_map}_{sat}_daysahead{daysahead}_R{real:03d}_knn_dataset.csv"
         )
+        if not os.path.exists(self.file_name):
+            raise FileNotFoundError(
+                "Looking for file, but did not exist: {self.file_name}"
+            )
+
         self.df_knn = pd.read_csv(self.file_name, index_col=0)
         self.df_knn.index = pd.to_datetime(self.df_knn.index)
 
@@ -122,7 +128,7 @@ class KnnUncertaintyDataset:
         return neighbors
 
 
-def prune_inds(distances, inds):
+def prune_inds(distances, inds, threshold=PRUNE_THRESHOLD):
     """Remove neighbors that are very close to eachother in time (e.g., with
     a carrington of eachother)
 
@@ -139,7 +145,7 @@ def prune_inds(distances, inds):
     inds_pruned = []
 
     for d, ind in zip(distances, inds):
-        if all(abs(ind - i) > PRUNE_THRESHOLD for i in inds_pruned):
+        if all(abs(ind - i) > threshold for i in inds_pruned):
             distances_pruned.append(d)
             inds_pruned.append(int(ind))
 
@@ -192,7 +198,9 @@ def setup_knn_variables(df_knn, nobs, npred):
 
 
 def unpack_knn_variables(X, Xtime, y, nobs, npred):
-    # a simpler way to interpret the large array X and y
+    """A simpler way to interpret the large array X and y, by breaking
+    them into components and storing in named dictionaries.
+    """
     before_obs = {}
     before_pred = {}
     before_times = {}
