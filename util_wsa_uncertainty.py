@@ -11,11 +11,11 @@ from scipy.spatial import KDTree
 WSA_DATA_PATH = "data/WSA_DATA"
 
 # Default size of observation window (4 per day * 3 days)
-NOBS = 4 * 3
+NOBS = 6 * 3
 
 # Default size of prediction window in addition to observation window
 # (4 per day * 3 days)
-NPRED = 4 * 6
+NPRED = 6 * 6
 
 # Avoid using k-NN items within this many timesteps of the target to avoid
 # duplicates
@@ -110,7 +110,7 @@ class KnnUncertaintyDataset:
         )
         if not os.path.exists(self.file_name):
             raise FileNotFoundError(
-                "Looking for file, but did not exist: {self.file_name}"
+                f"Looking for file, but did not exist: {self.file_name}"
             )
 
         self.df_knn = pd.read_csv(self.file_name, index_col=0)
@@ -167,7 +167,6 @@ class KnnUncertaintyDataset:
                 for before_time in self.before_times[ind]:
                     if abs(before_time - time) < VALIDATION_CLOSENESS_THROWOUT:
                         skip = True
-                        break
 
             if skip:
                 continue
