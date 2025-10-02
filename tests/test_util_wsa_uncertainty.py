@@ -103,13 +103,18 @@ def test_calculate_uncertainty_gaussian():
     )
     Vp_obs = np.zeros(NOBS) + 450
     Vp_pred = np.zeros(NPRED) + 500
-    
+
     got_sigma = calculate_uncertainty_gaussian(
-        knn_dataset=knn_dataset, times=times, Vp_pred=Vp_pred, Vp_obs=Vp_obs,
+        knn_dataset=knn_dataset,
+        times=times,
+        Vp_pred=Vp_pred,
+        Vp_obs=Vp_obs,
         k=k,
     )
     expected_sigma = 111.26773818005509
     threshold = 5
-    
+
     assert np.abs(got_sigma - expected_sigma) < threshold
+
+
 o

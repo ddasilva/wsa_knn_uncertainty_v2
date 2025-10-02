@@ -15,12 +15,12 @@ import pandas as pd
 from termcolor import cprint
 from tqdm import tqdm
 
-# Minimum and maximum days ahead
-DAYSAHEAD_MIN = 1
-DAYSAHEAD_MAX = 7
 
-# Number of realizations in WSA ensemble
-N_REALS = 12
+from constants import (
+    MIN_DAYSAHEAD,
+    MAX_DAYSAHEAD,
+    N_REALS,
+)
 
 # Julian dates stored in text files must have this bias added to them when they
 # are converted to conventional julian dates (eg, with AstroPy).
@@ -36,7 +36,7 @@ def main():
     print()
 
     # Do work for each value of daysahead
-    for daysahead in range(DAYSAHEAD_MIN, DAYSAHEAD_MAX + 1):
+    for daysahead in range(MIN_DAYSAHEAD, MAX_DAYSAHEAD + 1):
         do_daysahead(args, daysahead)
 
 
@@ -52,7 +52,7 @@ def do_daysahead(args, daysahead):
     files_per_real = get_files_per_real(args, daysahead)
 
     # Get single (long) dataframe with all realizations mixed
-    dfs_unbinned = load_unbinned_dataframe(files_per_real)
+    dfs_unbinned = load_unbinned_dataframe(files_per_real, args)
 
     # Bin the dataframe
     dfs_binned = bin_dataframes(dfs_unbinned, args)
@@ -110,8 +110,10 @@ def get_obs_data(args, dfs_binned):
         datetime(int(row.year), int(row.month), int(row.day), int(row.hour))
         for _, row in df_obs.iterrows()
     ]
+
     df_obs = df_obs[["Vp_obs"]]
     df_obs.loc[df_obs.Vp_obs < 0.1, "Vp_obs"] = np.nan
+    df_obs["Vp_obs"] = df_obs["Vp_obs"].resample(args.bin_freq).mean()
 
     return df_obs
 
@@ -166,7 +168,7 @@ def bin_dataframes(dfs_unbinned, args):
     return dfs_binned
 
 
-def load_unbinned_dataframe(files_per_real):
+def load_unbinned_dataframe(files_per_real, args):
     """Real all files per realization and concat them into a
     single dataframe.
 
@@ -181,7 +183,7 @@ def load_unbinned_dataframe(files_per_real):
         dfs = []
 
         for file_path in file_list:
-            df = read_file(file_path)
+            df = read_file(file_path, args)
             df["real"] = real
             dfs.append(df)
 
@@ -192,7 +194,7 @@ def load_unbinned_dataframe(files_per_real):
     return dfs_unbinned
 
 
-def read_file(file_path):
+def read_file(file_path, args):
     """Return parsed pred file.
 
     Args
@@ -207,6 +209,8 @@ def read_file(file_path):
     df.index = [
         Time(float(s) + JULDATE_BIAS, format="jd").to_datetime() for s in df["juldate"]
     ]
+    df = df[df.year >= args.min_year]
+    df = df[df.year <= args.max_year]
 
     return df
 
@@ -266,6 +270,8 @@ def get_parser():
     parser.add_argument("--sat", default="ACE")
     parser.add_argument("--input_map", default="AGONG")
     parser.add_argument("--bin-freq", default="6h")
+    parser.add_argument("--min-year", type=int, default=2010)
+    parser.add_argument("--max-year", type=int, default=2020)
 
     return parser
 
