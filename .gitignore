@@ -1,1 +1,5 @@
 data/WSA_DATA
+.ipynb_checkpoints
+__pycache__
+*~
+[#]*[#]

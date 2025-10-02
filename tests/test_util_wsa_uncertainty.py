@@ -11,6 +11,7 @@ from util_wsa_uncertainty import (
     NOBS,
     NPRED,
     prune_inds,
+    calculate_uncertainty_gaussian,
 )
 
 
@@ -84,3 +85,31 @@ def test_prune_inds():
 
     assert np.all(distances_pruned == [0, 5, 7, 8, 9])
     assert np.all(inds_pruned == [0, 50, 100, 150, 180])
+
+
+def test_calculate_uncertainty_gaussian():
+    k = 1000
+    required_nbrs = 50
+
+    knn_dataset = KnnUncertaintyDataset(
+        input_map="AGONG",
+        sat="ACE",
+        real=0,
+        daysahead=3,
+    )
+    times = np.array(
+        [datetime(2015, 1, 1) + i * timedelta(hours=6) for i in range(NPRED)],
+        dtype=object,
+    )
+    Vp_obs = np.zeros(NOBS) + 450
+    Vp_pred = np.zeros(NPRED) + 500
+    
+    got_sigma = calculate_uncertainty_gaussian(
+        knn_dataset=knn_dataset, times=times, Vp_pred=Vp_pred, Vp_obs=Vp_obs,
+        k=k,
+    )
+    expected_sigma = 111.26773818005509
+    threshold = 5
+    
+    assert np.abs(got_sigma - expected_sigma) < threshold
+o

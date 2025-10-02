@@ -26,6 +26,66 @@ PRUNE_THRESHOLD = 12
 VALIDATION_CLOSENESS_THROWOUT = timedelta(days=27)
 
 
+# Default K for nearest neighbor search (prior to prunining).
+DEFAULT_K = 1000
+
+
+def calculate_uncertainty_gaussian(
+    knn_dataset,
+    times,
+    Vp_pred,
+    Vp_obs,
+    k=DEFAULT_K,
+    return_neighbors=False,
+    verbose=1,
+):
+    """Calculate uncertainty using the gaussian approach.
+
+    Args
+      times: array of times, length knn_dataset.npred
+      Vp_pred: array of predictions, length knn_dataset.npred
+      Vp_obs: array of observations, length knn_dataset.nobs
+    Return
+      sigma
+    """
+    # Checks on function parameters
+    assert len(times) == knn_dataset.npred
+    assert len(Vp_pred) == knn_dataset.npred
+    assert len(Vp_obs) == knn_dataset.nobs
+
+    # Use knn_dataset to query neighbors
+    neighbors = knn_dataset.lookup_neighbors(
+        times=times,
+        Vp_obs=Vp_obs,
+        Vp_pred=Vp_pred,
+        k=k,
+    )
+
+    assert len(neighbors) > 0
+
+    # Calculate sigma
+    weights = np.array([1 / nbr.distance for nbr in neighbors])
+    errors = np.array([nbr.after_obs[0] - nbr.after_pred[0] for nbr in neighbors])
+    mask = np.isfinite(weights) & np.isfinite(errors)
+
+    variance = np.sum(weights[mask] * np.square(errors[mask])) / weights[mask].sum()
+    sigma = np.sqrt(variance)
+
+    # Print message if verbose
+    if verbose:
+        print(f"Found {len(neighbors)} neighbors")
+        print(f"Gaussian Sigma = {sigma}")
+        print()
+
+    # Return
+    if return_neighbors:
+        return_value = (sigma, neighbors)
+    else:
+        return_value = sigma
+
+    return return_value
+
+
 @dataclass
 class KnnUnceratintyNeighbor:
     """Data container for KnnUncertaintyDataset.lookup_neighbors()"""
@@ -69,7 +129,7 @@ class KnnUncertaintyDataset:
             self.after_pred,
         ) = unpack_knn_variables(self.X, self.Xtime, self.y, self.nobs, self.npred)
 
-    def lookup_neighbors(self, times, Vp_obs, Vp_pred, k=1000):
+    def lookup_neighbors(self, times, Vp_obs, Vp_pred, k=DEFAULT_K):
         """Lookup Neighbors
 
         Args
