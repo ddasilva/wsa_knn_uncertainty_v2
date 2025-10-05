@@ -6,8 +6,8 @@ MAX_DAYSAHEAD = 7
 N_REALS = 12
 
 # Default size of observation window (4 per day * 3 days)
-NOBS = 4 * 5
+DELTA_WINDOW = 4 * 5
 
-# Default size of prediction window in addition to observation window
-# (4 per day * 3 days)
-NPRED = 4 * 10
+# Frequency and per day
+BIN_FREQ = "6h"
+BIN_FREQ_PER_DAY = 4

@@ -5,7 +5,7 @@ import os
 import numpy as np
 import pandas as pd
 from scipy.spatial import KDTree
-from constants import NOBS, NPRED
+from constants import BIN_FREQ, BIN_FREQ_PER_DAY, DELTA_WINDOW
 
 # Path to WSA_DATA directory
 WSA_DATA_PATH = "data/WSA_DATA"
@@ -28,6 +28,7 @@ def calculate_uncertainty_gaussian(
     times,
     Vp_pred,
     Vp_obs,
+    daysahead,
     k=DEFAULT_K,
     return_neighbors=False,
     verbose=1,
@@ -56,25 +57,32 @@ def calculate_uncertainty_gaussian(
 
     assert len(neighbors) > 0
 
-    # Calculate sigma
     weights = np.array([1 / nbr.distance for nbr in neighbors])
-    errors = np.array([nbr.after_obs[0] - nbr.after_pred[0] for nbr in neighbors])
-    mask = np.isfinite(weights) & np.isfinite(errors)
+    delta_horizons = pd.date_range(times[knn_dataset.nobs], times[-1], freq=BIN_FREQ)
+    sigma_times = []
+    sigmas = []
 
-    variance = np.sum(weights[mask] * np.square(errors[mask])) / weights[mask].sum()
-    sigma = np.sqrt(variance)
+    for horizon_idx in range(len(delta_horizons)):
+        # Calculate sigma
+        errors = np.array(
+            [
+                nbr.after_obs[horizon_idx] - nbr.after_pred[horizon_idx]
+                for nbr in neighbors
+            ]
+        )
+        mask = np.isfinite(weights) & np.isfinite(errors)
 
-    # Print message if verbose
-    if verbose:
-        print(f"Found {len(neighbors)} neighbors")
-        print(f"Gaussian Sigma = {sigma}")
-        print()
+        variance = np.sum(weights[mask] * np.square(errors[mask])) / weights[mask].sum()
+        sigma = np.sqrt(variance)
+
+        sigma_times.append(times[knn_dataset.nobs + horizon_idx])
+        sigmas.append(sigma)
 
     # Return
     if return_neighbors:
-        return_value = (sigma, neighbors)
+        return_value = (sigma_times, sigmas, neighbors)
     else:
-        return_value = sigma
+        return_value = (sigma_times, sigmas)
 
     return return_value
 
@@ -95,7 +103,11 @@ class KnnUnceratintyNeighbor:
 
 class KnnUncertaintyDataset:
 
-    def __init__(self, input_map, sat, real, daysahead, nobs=NOBS, npred=NPRED):
+    def __init__(self, input_map, sat, real, daysahead, delta_window=DELTA_WINDOW):
+        self.daysahead = daysahead
+        self.nobs = delta_window
+        self.npred = delta_window + daysahead * BIN_FREQ_PER_DAY
+
         self.file_name = (
             f"{WSA_DATA_PATH}/UNCERTAINTY/KNN_DATASET/"
             f"{input_map.upper()}/R{real:03d}/"
@@ -109,10 +121,10 @@ class KnnUncertaintyDataset:
         self.df_knn = pd.read_csv(self.file_name, index_col=0)
         self.df_knn.index = pd.to_datetime(self.df_knn.index)
 
-        self.X, self.Xtime, self.y = setup_knn_variables(self.df_knn, nobs, npred)
+        self.X, self.Xtime, self.y = setup_knn_variables(
+            self.df_knn, self.nobs, self.npred
+        )
         self.tree = KDTree(self.X)
-        self.nobs = nobs
-        self.npred = npred
         (
             self.before_times,
             self.before_obs,
@@ -201,7 +213,7 @@ def prune_inds(distances, inds, threshold=PRUNE_THRESHOLD):
             distances_pruned.append(d)
             inds_pruned.append(int(ind))
 
-    dinstances_pruned = np.array(distances_pruned)
+    distances_pruned = np.array(distances_pruned)
     inds_pruned = np.array(inds_pruned)
 
     return distances_pruned, inds_pruned

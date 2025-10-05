@@ -10,40 +10,44 @@ from tqdm import tqdm
 
 sys.path.append(os.path.join(os.getcwd(), ".."))
 import util_wsa_uncertainty
-from util_wsa_uncertainty import NPRED, NOBS
 
 from constants import (
     MIN_DAYSAHEAD,
     MAX_DAYSAHEAD,
     N_REALS,
-    NOBS,
-    NPRED,
+    DELTA_WINDOW,
 )
 
 
 def main():
     do_processing(0, 3)
 
-    #window_size_days = 4.5
-    #do_processing(0, 3, nobs=int(4*window_size_days), npred=int(4*2*window_size_days), tag=f'windowSize{window_size_days}')
+    # window_size_days = 4.5
+    # do_processing(0, 3, nobs=int(4*window_size_days), npred=int(4*2*window_size_days), tag=f'windowSize{window_size_days}')
 
-    
-    #for daysahead in range(MIN_DAYSAHEAD, MAX_DAYSAHEAD + 1):
+    # for daysahead in range(MIN_DAYSAHEAD, MAX_DAYSAHEAD + 1):
     ##    do_processing(0, daysahead)
     #    for real in range(N_REALS):
     #        do_processing(real, daysahead)
 
 
-def do_processing(real, daysahead, nobs=NOBS, npred=NPRED, tag=None):
+def do_processing(real, daysahead, delta_window=DELTA_WINDOW, tag=None):
     # Print status message
-    print(colored(
-        f"Woking on dayshead={daysahead} and real={real} and "
-        f"npred={npred} and nobs={nobs} and tag={tag}", "green"))
+    print(
+        colored(
+            f"Woking on dayshead={daysahead} and real={real} and "
+            f"delta_window={delta_window} tag={tag}",
+            "green",
+        )
+    )
 
     # Create k-NN dataset for nearest neighbor queries
     knn_dataset = util_wsa_uncertainty.KnnUncertaintyDataset(
-        input_map="AGONG", sat="ACE", real=real, daysahead=daysahead,
-        npred=npred, nobs=nobs,
+        input_map="AGONG",
+        sat="ACE",
+        real=real,
+        daysahead=daysahead,
+        delta_window=delta_window,
     )
 
     # Load binned dataset to run through code. The code is smart enough to
@@ -57,56 +61,70 @@ def do_processing(real, daysahead, nobs=NOBS, npred=NPRED, tag=None):
     print(df_dataset)
 
     # Do main loop ----------------------------------------------------------
-    times_total = []
-    sigmas_total = []
-    Vp_pred_total = []
-    Vp_obs_total = []
-    crps_total = []
-    
-    inds = range(len(df_dataset) - npred)
-    #sample = random.sample(inds, 100)
+    df_rows = []
+
+    inds = range(len(df_dataset) - knn_dataset.npred)
+    # sample = random.sample(inds, 10)
     sample = inds
-    tasks = []
+    cols = None
 
     for i in tqdm(sample):
-        times = df_dataset.iloc[i : i + npred].index
-        Vp_obs = df_dataset.Vp_obs.iloc[i : i + nobs]
-        Vp_pred = df_dataset.Vp_pred.iloc[i : i + npred]
+        times = df_dataset.iloc[i : i + knn_dataset.npred].index
+        Vp_obs = df_dataset.Vp_obs.iloc[i : i + delta_window]
+        Vp_pred = df_dataset.Vp_pred.iloc[i : i + knn_dataset.npred]
 
-        sigma = util_wsa_uncertainty.calculate_uncertainty_gaussian(
+        sigma_times, sigmas = util_wsa_uncertainty.calculate_uncertainty_gaussian(
             knn_dataset=knn_dataset,
             times=times,
             Vp_pred=Vp_pred,
             Vp_obs=Vp_obs,
+            daysahead=daysahead,
             verbose=0,
         )
+        current_time = df_dataset.index[i + delta_window - 1]
+        df_row = [current_time]
+        cols = ["current_time"]
 
-        time_nom = df_dataset.index[i + nobs]
-        Vp_pred_nom = df_dataset.Vp_pred.iloc[i + nobs]
-        Vp_obs_nom = df_dataset.Vp_obs.iloc[i + nobs]
+        for delta_idx, (sigma_time, sigma) in enumerate(zip(sigma_times, sigmas)):
+            Vp_pred_nom = df_dataset.Vp_pred.iloc[i + delta_window + delta_idx]
+            Vp_obs_nom = df_dataset.Vp_obs.iloc[i + delta_window + delta_idx]
+            crps = ps.crps_gaussian(Vp_obs_nom, mu=Vp_pred_nom, sig=sigma)
 
-        crps = ps.crps_gaussian(Vp_obs_nom, mu=Vp_pred_nom, sig=sigma)
-        
-        times_total.append(time_nom)
-        sigmas_total.append(sigma)
-        Vp_pred_total.append(Vp_pred_nom)
-        Vp_obs_total.append(Vp_obs_nom)
-        crps_total.append(crps)
-        
+            df_row.extend(
+                [
+                    sigma_time,
+                    Vp_pred_nom,
+                    Vp_obs_nom,
+                    sigma,
+                    crps,
+                ]
+            )
+
+            cols.extend(
+                [
+                    f"forward_time{delta_idx}",
+                    f"Vp_pred{delta_idx}",
+                    f"Vp_obs{delta_idx}",
+                    f"sigma{delta_idx}",
+                    f"crps{delta_idx}",
+                ]
+            )
+
+        df_rows.append(df_row)
+
     # Write to disk ------------------------------
     if tag:
-        tag = f'{tag}/'
+        tag = f"{tag}/"
     else:
-        tag = ''
+        tag = ""
 
     out_file = f"data/processed/{tag}processed_daysahead{daysahead}_R{real:03d}.csv"
 
     if not os.path.exists(out_file):
         os.makedirs(os.path.dirname(out_file), exist_ok=True)
 
-    df_dict = dict(sigma=sigmas_total, Vp_pred=Vp_pred_total, Vp_obs=Vp_obs_total, crps=crps_total)
-    df = pd.DataFrame(df_dict, index=times_total)
-    df.to_csv(out_file)
+    df = pd.DataFrame(df_rows, columns=cols)
+    df.to_csv(out_file, index=0)
 
     print(f"Wrote to {out_file}")
 

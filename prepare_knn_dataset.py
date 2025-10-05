@@ -17,6 +17,7 @@ from tqdm import tqdm
 
 
 from constants import (
+    BIN_FREQ,
     MIN_DAYSAHEAD,
     MAX_DAYSAHEAD,
     N_REALS,
@@ -269,7 +270,7 @@ def get_parser():
     parser.add_argument("--data-root", default="/data/dedasilv/wsa/LearnedUncertainty")
     parser.add_argument("--sat", default="ACE")
     parser.add_argument("--input_map", default="AGONG")
-    parser.add_argument("--bin-freq", default="6h")
+    parser.add_argument("--bin-freq", default=BIN_FREQ)
     parser.add_argument("--min-year", type=int, default=2010)
     parser.add_argument("--max-year", type=int, default=2020)
 
