@@ -5,17 +5,10 @@ import os
 import numpy as np
 import pandas as pd
 from scipy.spatial import KDTree
-
+from constants import NOBS, NPRED
 
 # Path to WSA_DATA directory
 WSA_DATA_PATH = "data/WSA_DATA"
-
-# Default size of observation window (4 per day * 3 days)
-NOBS = 6 * 3
-
-# Default size of prediction window in addition to observation window
-# (4 per day * 3 days)
-NPRED = 6 * 6
 
 # Avoid using k-NN items within this many timesteps of the target to avoid
 # duplicates
