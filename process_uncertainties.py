@@ -18,17 +18,16 @@ from constants import (
     DELTA_WINDOW,
 )
 
+import joblib
+
 
 def main():
-    do_processing(0, 3)
+    tasks = []
+    
+    for daysahead in range(MIN_DAYSAHEAD, MAX_DAYSAHEAD + 1):
+        tasks.append(joblib.delayed(do_processing)(0, daysahead))
 
-    # window_size_days = 4.5
-    # do_processing(0, 3, nobs=int(4*window_size_days), npred=int(4*2*window_size_days), tag=f'windowSize{window_size_days}')
-
-    # for daysahead in range(MIN_DAYSAHEAD, MAX_DAYSAHEAD + 1):
-    ##    do_processing(0, daysahead)
-    #    for real in range(N_REALS):
-    #        do_processing(real, daysahead)
+    joblib.Parallel(n_jobs=10, verbose=1000)(tasks)
 
 
 def do_processing(real, daysahead, delta_window=DELTA_WINDOW, tag=None):
@@ -64,7 +63,7 @@ def do_processing(real, daysahead, delta_window=DELTA_WINDOW, tag=None):
     df_rows = []
 
     inds = range(len(df_dataset) - knn_dataset.npred)
-    # sample = random.sample(inds, 10)
+    #sample = random.sample(inds, 10)
     sample = inds
     cols = None
 
