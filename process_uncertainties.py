@@ -23,11 +23,15 @@ import joblib
 
 def main():
     tasks = []
-    
-    for daysahead in range(MIN_DAYSAHEAD, MAX_DAYSAHEAD + 1):
-        tasks.append(joblib.delayed(do_processing)(0, daysahead))
 
-    joblib.Parallel(n_jobs=10, verbose=1000)(tasks)
+    for delta_window in range(1, 27):
+        for daysahead in range(MIN_DAYSAHEAD, MAX_DAYSAHEAD + 1):
+            tag = f'delta_window{delta_window}'
+            tasks.append(joblib.delayed(do_processing)(
+                0, daysahead, delta_window=delta_window, tag=tag
+            ))
+
+    joblib.Parallel(n_jobs=36, verbose=1000)(tasks)
 
 
 def do_processing(real, daysahead, delta_window=DELTA_WINDOW, tag=None):
