@@ -18,9 +18,11 @@ PRUNE_THRESHOLD = 12
 # and data leakage issues
 VALIDATION_CLOSENESS_THROWOUT = timedelta(days=27)
 
-
 # Default K for nearest neighbor search (prior to prunining).
 DEFAULT_K = 1000
+
+# Query this many neighbors and then subset to target k after pruning
+INFLATE_K = 500
 
 
 def calculate_uncertainty_gaussian(
@@ -29,6 +31,7 @@ def calculate_uncertainty_gaussian(
     Vp_pred,
     Vp_obs,
     daysahead,
+    method='method1',
     k=DEFAULT_K,
     return_neighbors=False,
     verbose=1,
@@ -64,14 +67,24 @@ def calculate_uncertainty_gaussian(
 
     for horizon_idx in range(len(delta_horizons)):
         # Calculate sigma
-        errors = np.array(
-            [
-                nbr.after_obs[horizon_idx] - nbr.after_pred[horizon_idx]
-                for nbr in neighbors
-            ]
-        )
+        if method == 'method1':
+            errors = np.array(
+                [
+                    nbr.after_obs[horizon_idx] - Vp_pred.iloc[knn_dataset.nobs + horizon_idx]
+                    for nbr in neighbors
+                ]
+            )
+        elif method == 'method2':
+            errors = np.array(
+                [
+                    nbr.after_obs[horizon_idx] - nbr.after_pred[horizon_idx]
+                    for nbr in neighbors
+                ]
+            )
+        else:
+            raise RuntimeError(f'Uknown method {method}')
+        
         mask = np.isfinite(weights) & np.isfinite(errors)
-
         variance = np.sum(weights[mask] * np.square(errors[mask])) / weights[mask].sum()
         sigma = np.sqrt(variance)
 
@@ -154,7 +167,7 @@ class KnnUncertaintyDataset:
         query[: self.nobs] = Vp_obs
         query[self.nobs :] = Vp_pred
 
-        distances, inds = self.tree.query(query, k=k)
+        distances, inds = self.tree.query(query, k=INFLATE_K)
 
         # Remove neighbors that are very close to eachother in time (e.g., with
         # carrington of eachother)
@@ -172,7 +185,10 @@ class KnnUncertaintyDataset:
                 for before_time in self.before_times[ind]:
                     if abs(before_time - time) < VALIDATION_CLOSENESS_THROWOUT:
                         skip = True
-
+                for after_time in self.after_times[ind]:
+                    if abs(after_time - time) < VALIDATION_CLOSENESS_THROWOUT:
+                        skip = True
+                        
             if skip:
                 continue
 
@@ -189,7 +205,9 @@ class KnnUncertaintyDataset:
                 )
             )
 
-        return neighbors
+        assert len(neighbors) >= k, 'INFLATE_K too small'
+    
+        return neighbors[:k]
 
 
 def prune_inds(distances, inds, threshold=PRUNE_THRESHOLD):

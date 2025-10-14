@@ -13,23 +13,13 @@ from grid_definition import define_grid
 
 
 def main():
-    tasks = []
-    tags = set()
-    
-    for k, method, delta_window, daysahead, tag in define_grid():
-        tags.add(tag)
-
-    for tag in tags:
-        tasks.append(joblib.delayed(percentile_analysis)(
-            real=0, tag=tag, prefix=tag, 
-        ))
-
-    n_jobs = 45
-    with joblib_progress("Calculating percentile...", total=len(tasks)):
-        joblib.Parallel(n_jobs=n_jobs, verbose=1000)(tasks)
+    percentile_analysis_baseline(
+        real=0, tag='method2/k20/delta_window4', prefix='baseline', do_baseline=True,
+        verbose=1,
+    )
 
 
-def percentile_analysis(real, tag=None, prefix=None, verbose=0, do_baseline=False):
+def percentile_analysis_baseline(real, tag=None, prefix=None, verbose=0, do_baseline=False):
     # Return if already processed -----------------------------------------------
     prefix = prefix or ''
     out_file = f"data/processed/{prefix}/percentiles_R{real:03d}.csv"
@@ -67,11 +57,7 @@ def percentile_analysis(real, tag=None, prefix=None, verbose=0, do_baseline=Fals
             for _, row in dfs[daysahead].iterrows():
                 Vp_pred = row[f'Vp_pred{i}']
                 Vp_obs = row[f'Vp_obs{i}']
-
-                if do_baseline:
-                    sigma = baseline_sigma
-                else:                
-                    sigma = row[f'sigma{i}']
+                sigma = baseline_sigma
                     
                 left, right = norm(loc=Vp_pred, scale=sigma).interval(percentile/100)
                 

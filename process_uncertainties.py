@@ -2,6 +2,9 @@ import os
 import random
 import sys
 
+
+import joblib
+from joblib_progress import joblib_progress
 import numpy as np
 import pandas as pd
 import properscoring as ps
@@ -17,32 +20,46 @@ from constants import (
     N_REALS,
     DELTA_WINDOW,
 )
-
-import joblib
+from grid_definition import define_grid
 
 
 def main():
+    # Grid search calibration ----------------------------------------
     tasks = []
 
-    for delta_window in range(1, 27):
-        for daysahead in range(MIN_DAYSAHEAD, MAX_DAYSAHEAD + 1):
-            tag = f'delta_window{delta_window}'
-            tasks.append(joblib.delayed(do_processing)(
-                0, daysahead, delta_window=delta_window, tag=tag
-            ))
+    for k, method, delta_window, daysahead, tag in define_grid():
+        tasks.append(joblib.delayed(do_processing)(
+            0, daysahead, delta_window=delta_window, k=k, 
+            method=method, tag=tag, verbose=0,
+        ))
 
-    joblib.Parallel(n_jobs=36, verbose=1000)(tasks)
+    n_jobs = 65
+    
+    with joblib_progress("Processing Uncetainties...", total=len(tasks)):
+        joblib.Parallel(n_jobs=n_jobs, verbose=1000)(tasks)
 
 
-def do_processing(real, daysahead, delta_window=DELTA_WINDOW, tag=None):
+def do_processing(real, daysahead, delta_window=DELTA_WINDOW,
+                  tag=None, method='method1', k=None, verbose=1):
+    if tag:
+        tag = f"{tag}/"
+    else:
+        tag = ""
+
+    out_file = f"data/processed/{tag}processed_daysahead{daysahead}_R{real:03d}.csv"
+
+    if os.path.exists(out_file):
+        return
+    
     # Print status message
-    print(
-        colored(
-            f"Woking on dayshead={daysahead} and real={real} and "
-            f"delta_window={delta_window} tag={tag}",
-            "green",
+    if verbose:
+        print(
+            colored(
+                f"Woking on dayshead={daysahead} and real={real} and "
+                f"delta_window={delta_window} tag={tag}",
+                "green",
+            )
         )
-    )
 
     # Create k-NN dataset for nearest neighbor queries
     knn_dataset = util_wsa_uncertainty.KnnUncertaintyDataset(
@@ -60,8 +77,9 @@ def do_processing(real, daysahead, delta_window=DELTA_WINDOW, tag=None):
     df_dataset.index = pd.to_datetime(df_dataset.index)
     df_dataset = df_dataset.interpolate()
 
-    print("Loaded data:")
-    print(df_dataset)
+    if verbose:
+        print("Loaded data:")
+        print(df_dataset)
 
     # Do main loop ----------------------------------------------------------
     df_rows = []
@@ -71,7 +89,15 @@ def do_processing(real, daysahead, delta_window=DELTA_WINDOW, tag=None):
     sample = inds
     cols = None
 
-    for i in tqdm(sample):
+    if k is None:
+        k = util_wsa_uncertainty.DEFAULT_K
+
+    if verbose:
+        iterator = tqdm(sample)
+    else:
+        iterator = sample
+        
+    for i in iterator:
         times = df_dataset.iloc[i : i + knn_dataset.npred].index
         Vp_obs = df_dataset.Vp_obs.iloc[i : i + delta_window]
         Vp_pred = df_dataset.Vp_pred.iloc[i : i + knn_dataset.npred]
@@ -81,8 +107,10 @@ def do_processing(real, daysahead, delta_window=DELTA_WINDOW, tag=None):
             times=times,
             Vp_pred=Vp_pred,
             Vp_obs=Vp_obs,
+            method=method,
             daysahead=daysahead,
-            verbose=0,
+            k=k,
+            verbose=0,            
         )
         current_time = df_dataset.index[i + delta_window - 1]
         df_row = [current_time]
@@ -116,20 +144,14 @@ def do_processing(real, daysahead, delta_window=DELTA_WINDOW, tag=None):
         df_rows.append(df_row)
 
     # Write to disk ------------------------------
-    if tag:
-        tag = f"{tag}/"
-    else:
-        tag = ""
-
-    out_file = f"data/processed/{tag}processed_daysahead{daysahead}_R{real:03d}.csv"
-
     if not os.path.exists(out_file):
         os.makedirs(os.path.dirname(out_file), exist_ok=True)
 
     df = pd.DataFrame(df_rows, columns=cols)
     df.to_csv(out_file, index=0)
 
-    print(f"Wrote to {out_file}")
+    if verbose:
+        print(f"Wrote to {out_file}")
 
 
 if __name__ == "__main__":
