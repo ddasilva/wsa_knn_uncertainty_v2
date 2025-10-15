@@ -29,7 +29,7 @@ DEFAULT_K = 50
 INFLATE_K = {
     (0, 35): 500,
     (35, 50): 1000,
-    (50, 100): 2000,
+    (50, 100): 2500,
 }
 
 
@@ -39,7 +39,7 @@ def calculate_uncertainty_gaussian(
     Vp_pred,
     Vp_obs,
     daysahead,
-    method="gaussian2",
+    method="gaussian",
     k=DEFAULT_K,
     return_neighbors=False,
     verbose=1,
@@ -77,13 +77,14 @@ def calculate_uncertainty_gaussian(
 
     if method == "gaussian":
         variance = np.sum(weights[mask] * np.square(errors[mask])) / weights[mask].sum()
-        forward_mean = np.sum(weights[mask] * errors[mask]) / weights[mask].sum()
+        #forward_mean = np.sum(weights[mask] * errors[mask]) / weights[mask].sum()
+        forward_mean = 0.0
         forward_sigma = np.sqrt(variance)
         forward_skew = np.nan
-
     elif method == "skew_gaussian":
         # forward_skew, forward_mean, forward_sigma = skewnorm.fit(errors[mask])
-        forward_skew, forward_mean, forward_sigma = weighted_skewnorm_fit(
+        forward_mean = 0.0
+        forward_skew, forward_sigma = weighted_skewnorm_fit(
             errors[mask], weights[mask]
         )
     else:
@@ -103,6 +104,30 @@ def calculate_uncertainty_gaussian(
 
     return return_value
 
+# def weighted_skewnorm_fit(data, weights):
+#     # Normalize weights to sum to 1 (optional but helps)
+#     weights = np.array(weights, dtype=float)
+#     weights /= weights.sum()
+
+#     # Negative log-likelihood function
+#     def nll(params):
+#         a, loc, scale = params
+#         if scale <= 0:
+#             return np.inf
+#         pdf_vals = skewnorm.pdf(data, a, loc=loc, scale=scale)
+#         # Add small epsilon to avoid log(0)
+#         return -np.sum(weights * np.log(pdf_vals + 1e-12))
+
+#     # Initial guess (use unweighted fit as a starting point)
+#     a0, loc0, scale0 = skewnorm.fit(data)
+#     res = minimize(
+#         nll,
+#         [a0, loc0, scale0],
+#         method="L-BFGS-B",
+#         bounds=[(-20, 20), (None, None), (1e-6, None)],
+#     )
+#     return res.x  # returns [a, loc, scale]
+
 
 def weighted_skewnorm_fit(data, weights):
     # Normalize weights to sum to 1 (optional but helps)
@@ -111,22 +136,22 @@ def weighted_skewnorm_fit(data, weights):
 
     # Negative log-likelihood function
     def nll(params):
-        a, loc, scale = params
+        a, scale = params
         if scale <= 0:
             return np.inf
-        pdf_vals = skewnorm.pdf(data, a, loc=loc, scale=scale)
+        pdf_vals = skewnorm.pdf(data, a, loc=0, scale=scale)
         # Add small epsilon to avoid log(0)
         return -np.sum(weights * np.log(pdf_vals + 1e-12))
 
     # Initial guess (use unweighted fit as a starting point)
-    a0, loc0, scale0 = skewnorm.fit(data)
+    a0, _, scale0 = skewnorm.fit(data)
     res = minimize(
         nll,
-        [a0, loc0, scale0],
+        [a0, scale0],
         method="L-BFGS-B",
-        bounds=[(-20, 20), (None, None), (1e-6, None)],
+        bounds=[(-20, 20), (1e-6, None)],
     )
-    return res.x  # returns [a, loc, scale]
+    return res.x  # returns [a, scale]
 
 
 @dataclass

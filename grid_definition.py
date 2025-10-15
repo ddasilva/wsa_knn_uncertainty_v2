@@ -10,9 +10,9 @@ from constants import (
 def define_grid():
     grid = []
 
-    for k in range(5, 150, 10):
+    for k in range(25, 205, 25):
         for method in ["gaussian", "skew_gaussian"]:
-            for delta_window in range(0, 4 * BIN_FREQ_PER_DAY, 1):
+            for delta_window in range(0, 2 * BIN_FREQ_PER_DAY + 1, 4):
                 for daysahead in range(MIN_DAYSAHEAD, MAX_DAYSAHEAD + 1):
                     tag = f"{method}/k{k}/delta_window{delta_window}"
                     grid.append((k, method, delta_window, daysahead, tag))

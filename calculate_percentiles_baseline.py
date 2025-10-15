@@ -9,6 +9,7 @@ from scipy.stats import norm
 
 sys.path.append("..")
 from constants import MIN_DAYSAHEAD, MAX_DAYSAHEAD
+import util_wsa_uncertainty
 
 
 def main():
@@ -19,7 +20,6 @@ def main():
             joblib.delayed(percentile_analysis_baseline)(
                 real=0,
                 daysahead=daysahead,
-                tag="gaussian2/k20/delta_window4",
                 verbose=0,
             )
         )
@@ -30,32 +30,34 @@ def main():
         joblib.Parallel(n_jobs=n_jobs, verbose=1000)(tasks)
 
 
-def percentile_analysis_baseline(real, daysahead, tag=None, prefix=None, verbose=1):
+def percentile_analysis_baseline(real, daysahead, prefix=None, verbose=1):
     # Return if already processed -----------------------------------------------
     prefix = prefix or ""
     out_file = (
         f"data/processed/baseline/percentiles_daysahead{daysahead}_R{real:03d}.csv"
     )
 
-    # if os.path.exists(out_file):
-    #    return
+    if os.path.exists(out_file):
+        return
 
     # Load dataframe ---------------------------------------------------------
     dfs = {}
-    tag = tag or ""
 
-    for i in range(MIN_DAYSAHEAD, MAX_DAYSAHEAD + 1):
-        # for i in [1]:
-        dfs[i] = pd.read_csv(
-            f"data/processed/{tag}/processed_daysahead{i}_R{real:03d}.csv"
+    for i in [daysahead]:
+        knn_dataset = util_wsa_uncertainty.KnnUncertaintyDataset(
+            input_map="AGONG",
+            sat="ACE",
+            real=real,
+            daysahead=daysahead,
         )
-
+        dfs[i] = pd.read_csv(knn_dataset.file_name, index_col=0).dropna()
+        
     if verbose:
         print(dfs[1].head().to_string())
 
     # Calculate percentiles --------------------------------------------------
     percentiles = list(range(0, 100, 5))
-    daysahead_cols = {daysahead: f"{daysahead} Days" for daysahead in dfs.keys()}
+    daysahead_cols = {daysahead: "ObservedPercentile"}
     records = {}
 
     for daysahead, colname in daysahead_cols.items():
@@ -65,7 +67,7 @@ def percentile_analysis_baseline(real, daysahead, tag=None, prefix=None, verbose
         baseline_sigma = np.sqrt(
             np.mean(
                 np.square(
-                    dfs[daysahead]["forward_Vp_pred"] - dfs[daysahead]["forward_Vp_obs"]
+                    dfs[daysahead]["Vp_pred"] - dfs[daysahead]["Vp_obs"]
                 )
             )
         )
@@ -74,8 +76,8 @@ def percentile_analysis_baseline(real, daysahead, tag=None, prefix=None, verbose
             records[colname, percentile] = []
 
             for _, row in dfs[daysahead].iterrows():
-                Vp_pred = row["forward_Vp_pred"]
-                Vp_obs = row["forward_Vp_obs"]
+                Vp_pred = row["Vp_pred"]
+                Vp_obs = row["Vp_obs"]
                 left, right = norm(loc=Vp_pred, scale=baseline_sigma).interval(
                     percentile / 100
                 )
@@ -90,7 +92,7 @@ def percentile_analysis_baseline(real, daysahead, tag=None, prefix=None, verbose
 
     for idx, percentile in enumerate(percentiles):
         df_row = [percentile]
-        df_cols = ["percentile"]
+        df_cols = ["TruePercentile"]
 
         for colname in daysahead_cols.values():
             df_row.append(100 * np.mean(records[colname, percentile]))
