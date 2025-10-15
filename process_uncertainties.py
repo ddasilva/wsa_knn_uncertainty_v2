@@ -2,7 +2,6 @@ import os
 import random
 import sys
 
-
 import joblib
 from joblib_progress import joblib_progress
 import numpy as np
@@ -14,33 +13,37 @@ from tqdm import tqdm
 sys.path.append(os.path.join(os.getcwd(), ".."))
 import util_wsa_uncertainty
 
-from constants import (
-    MIN_DAYSAHEAD,
-    MAX_DAYSAHEAD,
-    N_REALS,
-    DELTA_WINDOW,
-)
 from grid_definition import define_grid
 
 
 def main():
+    # Test code -------------------------------------------------------
+    # do_processing(real=0, daysahead=3, method='method2', tag='test', k=20, delta_window=4, verbose=1)
+    # return
+
     # Grid search calibration ----------------------------------------
     tasks = []
 
     for k, method, delta_window, daysahead, tag in define_grid():
-        tasks.append(joblib.delayed(do_processing)(
-            0, daysahead, delta_window=delta_window, k=k, 
-            method=method, tag=tag, verbose=0,
-        ))
+        tasks.append(
+            joblib.delayed(do_processing)(
+                real=0,
+                daysahead=daysahead,
+                method=method,
+                tag=tag,
+                k=k,
+                delta_window=delta_window,
+                verbose=0,
+            )
+        )
 
     n_jobs = 65
-    
+
     with joblib_progress("Processing Uncetainties...", total=len(tasks)):
         joblib.Parallel(n_jobs=n_jobs, verbose=1000)(tasks)
 
 
-def do_processing(real, daysahead, delta_window=DELTA_WINDOW,
-                  tag=None, method='method1', k=None, verbose=1):
+def do_processing(real, daysahead, method, tag, k, delta_window, verbose=1):
     if tag:
         tag = f"{tag}/"
     else:
@@ -50,7 +53,7 @@ def do_processing(real, daysahead, delta_window=DELTA_WINDOW,
 
     if os.path.exists(out_file):
         return
-    
+
     # Print status message
     if verbose:
         print(
@@ -85,7 +88,7 @@ def do_processing(real, daysahead, delta_window=DELTA_WINDOW,
     df_rows = []
 
     inds = range(len(df_dataset) - knn_dataset.npred)
-    #sample = random.sample(inds, 10)
+    # sample = random.sample(inds, 10)
     sample = inds
     cols = None
 
@@ -96,13 +99,13 @@ def do_processing(real, daysahead, delta_window=DELTA_WINDOW,
         iterator = tqdm(sample)
     else:
         iterator = sample
-        
+
     for i in iterator:
         times = df_dataset.iloc[i : i + knn_dataset.npred].index
         Vp_obs = df_dataset.Vp_obs.iloc[i : i + delta_window]
         Vp_pred = df_dataset.Vp_pred.iloc[i : i + knn_dataset.npred]
 
-        sigma_times, sigmas = util_wsa_uncertainty.calculate_uncertainty_gaussian(
+        sigma_time, sigma = util_wsa_uncertainty.calculate_uncertainty_gaussian(
             knn_dataset=knn_dataset,
             times=times,
             Vp_pred=Vp_pred,
@@ -110,40 +113,35 @@ def do_processing(real, daysahead, delta_window=DELTA_WINDOW,
             method=method,
             daysahead=daysahead,
             k=k,
-            verbose=0,            
+            verbose=0,
         )
-        current_time = df_dataset.index[i + delta_window - 1]
-        df_row = [current_time]
-        cols = ["current_time"]
 
-        for delta_idx, (sigma_time, sigma) in enumerate(zip(sigma_times, sigmas)):
-            Vp_pred_nom = df_dataset.Vp_pred.iloc[i + delta_window + delta_idx]
-            Vp_obs_nom = df_dataset.Vp_obs.iloc[i + delta_window + delta_idx]
-            crps = ps.crps_gaussian(Vp_obs_nom, mu=Vp_pred_nom, sig=sigma)
+        current_time = df_dataset.index[i + delta_window]
+        Vp_pred_nom = df_dataset.Vp_pred.iloc[i + knn_dataset.npred]
+        Vp_obs_nom = df_dataset.Vp_obs.iloc[i + knn_dataset.npred]
+        crps = ps.crps_gaussian(Vp_obs_nom, mu=Vp_pred_nom, sig=sigma)
 
-            df_row.extend(
-                [
-                    sigma_time,
-                    Vp_pred_nom,
-                    Vp_obs_nom,
-                    sigma,
-                    crps,
-                ]
-            )
-
-            cols.extend(
-                [
-                    f"forward_time{delta_idx}",
-                    f"Vp_pred{delta_idx}",
-                    f"Vp_obs{delta_idx}",
-                    f"sigma{delta_idx}",
-                    f"crps{delta_idx}",
-                ]
-            )
+        df_row = [
+            current_time,
+            sigma_time,
+            Vp_pred_nom,
+            Vp_obs_nom,
+            sigma,
+            crps,
+        ]
 
         df_rows.append(df_row)
 
     # Write to disk ------------------------------
+    cols = [
+        "current_time",
+        "forward_time",
+        "forward_Vp_pred",
+        "forward_Vp_obs",
+        "forward_sigma",
+        "forward_crps",
+    ]
+
     if not os.path.exists(out_file):
         os.makedirs(os.path.dirname(out_file), exist_ok=True)
 

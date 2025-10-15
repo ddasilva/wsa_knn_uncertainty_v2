@@ -1,3 +1,4 @@
+import bisect
 from dataclasses import dataclass
 from datetime import timedelta
 import os
@@ -19,10 +20,14 @@ PRUNE_THRESHOLD = 12
 VALIDATION_CLOSENESS_THROWOUT = timedelta(days=27)
 
 # Default K for nearest neighbor search (prior to prunining).
-DEFAULT_K = 1000
+DEFAULT_K = 50
+
 
 # Query this many neighbors and then subset to target k after pruning
-INFLATE_K = 500
+INFLATE_K = {
+    (0, 35): 500,
+    (35, 50): 1000,
+}
 
 
 def calculate_uncertainty_gaussian(
@@ -31,7 +36,7 @@ def calculate_uncertainty_gaussian(
     Vp_pred,
     Vp_obs,
     daysahead,
-    method='method1',
+    method="method1",
     k=DEFAULT_K,
     return_neighbors=False,
     verbose=1,
@@ -61,41 +66,25 @@ def calculate_uncertainty_gaussian(
     assert len(neighbors) > 0
 
     weights = np.array([1 / nbr.distance for nbr in neighbors])
-    delta_horizons = pd.date_range(times[knn_dataset.nobs], times[-1], freq=BIN_FREQ)
-    sigma_times = []
-    sigmas = []
 
-    for horizon_idx in range(len(delta_horizons)):
-        # Calculate sigma
-        if method == 'method1':
-            errors = np.array(
-                [
-                    nbr.after_obs[horizon_idx] - Vp_pred.iloc[knn_dataset.nobs + horizon_idx]
-                    for nbr in neighbors
-                ]
-            )
-        elif method == 'method2':
-            errors = np.array(
-                [
-                    nbr.after_obs[horizon_idx] - nbr.after_pred[horizon_idx]
-                    for nbr in neighbors
-                ]
-            )
-        else:
-            raise RuntimeError(f'Uknown method {method}')
-        
-        mask = np.isfinite(weights) & np.isfinite(errors)
-        variance = np.sum(weights[mask] * np.square(errors[mask])) / weights[mask].sum()
-        sigma = np.sqrt(variance)
+    # Calculate sigma
+    if method == "method1":
+        errors = np.array([nbr.after_obs[-1] - Vp_pred.iloc[-1] for nbr in neighbors])
+    elif method == "method2":
+        errors = np.array([nbr.after_obs[-1] - nbr.after_pred[-1] for nbr in neighbors])
+    else:
+        raise RuntimeError(f"Uknown method {method}")
 
-        sigma_times.append(times[knn_dataset.nobs + horizon_idx])
-        sigmas.append(sigma)
+    mask = np.isfinite(weights) & np.isfinite(errors)
+    variance = np.sum(weights[mask] * np.square(errors[mask])) / weights[mask].sum()
+    sigma = np.sqrt(variance)
+    sigma_time = times[-1]
 
     # Return
     if return_neighbors:
-        return_value = (sigma_times, sigmas, neighbors)
+        return_value = (sigma_time, sigma, neighbors)
     else:
-        return_value = (sigma_times, sigmas)
+        return_value = (sigma_time, sigma)
 
     return return_value
 
@@ -167,7 +156,14 @@ class KnnUncertaintyDataset:
         query[: self.nobs] = Vp_obs
         query[self.nobs :] = Vp_pred
 
-        distances, inds = self.tree.query(query, k=INFLATE_K)
+        inflate_k = list(INFLATE_K.values())[-1]
+
+        for (start, stop), value in INFLATE_K.items():
+            if start <= k <= stop:
+                inflate_k = value
+                break
+
+        distances, inds = self.tree.query(query, k=inflate_k)
 
         # Remove neighbors that are very close to eachother in time (e.g., with
         # carrington of eachother)
@@ -181,14 +177,20 @@ class KnnUncertaintyDataset:
             # validation and data leakage issues
             skip = False
 
-            for time in times:
-                for before_time in self.before_times[ind]:
-                    if abs(before_time - time) < VALIDATION_CLOSENESS_THROWOUT:
-                        skip = True
-                for after_time in self.after_times[ind]:
-                    if abs(after_time - time) < VALIDATION_CLOSENESS_THROWOUT:
-                        skip = True
-                        
+            for time in [times[0], times[-1]]:
+                if (
+                    abs(self.before_times[ind][0] - time)
+                    < VALIDATION_CLOSENESS_THROWOUT
+                ):
+                    skip = True
+                    break
+                if (
+                    abs(self.after_times[ind][-1] - time)
+                    < VALIDATION_CLOSENESS_THROWOUT
+                ):
+                    skip = True
+                    break
+
             if skip:
                 continue
 
@@ -205,36 +207,78 @@ class KnnUncertaintyDataset:
                 )
             )
 
-        assert len(neighbors) >= k, 'INFLATE_K too small'
-    
+        assert len(neighbors) >= k, f"INFLATE_K ({inflate_k}) too small for k={k}"
+
         return neighbors[:k]
+
+
+# def prune_inds(distances, inds, threshold=PRUNE_THRESHOLD):
+#     """Remove neighbors that are very close to eachother in time (e.g., with
+#     a carrington of eachother)
+
+#     Args
+#       distances: array of distances to neighbors
+#       inds: array of indices to neighbors
+#     Returns
+#       distances_pruned: array of distances to neighbors, pruned
+#       inds_pruned: array of indices to neighbors, pruned
+#     See Also
+#       Module variable PRUNE_THRESHOLD (this module)
+#     """
+#     distances_pruned = []
+#     inds_pruned = []
+
+#     for d, ind in zip(distances, inds):
+#         if all(abs(ind - i) > threshold for i in inds_pruned):
+#             distances_pruned.append(d)
+#             inds_pruned.append(int(ind))
+
+#     distances_pruned = np.array(distances_pruned)
+#     inds_pruned = np.array(inds_pruned)
+
+#     return distances_pruned, inds_pruned
 
 
 def prune_inds(distances, inds, threshold=PRUNE_THRESHOLD):
     """Remove neighbors that are very close to eachother in time (e.g., with
     a carrington of eachother)
-
-    Args
-      distances: array of distances to neighbors
-      inds: array of indices to neighbors
-    Returns
-      distances_pruned: array of distances to neighbors, pruned
-      inds_pruned: array of indices to neighbors, pruned
-    See Also
-      Module variable PRUNE_THRESHOLD (this module)
     """
+    # Ensure input as numpy arrays for easy processing
+    distances = np.asarray(distances)
+    inds = np.asarray(inds)
+
+    # Sort by inds for reproducibility, optional
+    sort_order = np.argsort(inds)
+    inds = inds[sort_order]
+    distances = distances[sort_order]
+
     distances_pruned = []
     inds_pruned = []
 
     for d, ind in zip(distances, inds):
-        if all(abs(ind - i) > threshold for i in inds_pruned):
+        # inds_pruned is always sorted, so binary search for nearest placement
+        insertion_point = bisect.bisect_left(inds_pruned, ind)
+        ok = True
+        # Check neighbor before
+        if (
+            insertion_point > 0
+            and abs(ind - inds_pruned[insertion_point - 1]) <= threshold
+        ):
+            ok = False
+        # Check neighbor after
+        if (
+            insertion_point < len(inds_pruned)
+            and ok
+            and abs(ind - inds_pruned[insertion_point : insertion_point + 1][0:1])
+            <= threshold
+        ):
+            ok = False
+        if ok:
             distances_pruned.append(d)
-            inds_pruned.append(int(ind))
+            inds_pruned.insert(insertion_point, ind)
 
-    distances_pruned = np.array(distances_pruned)
-    inds_pruned = np.array(inds_pruned)
-
-    return distances_pruned, inds_pruned
+    # Return as numpy arrays for consistency
+    return np.array(distances_pruned), np.array(inds_pruned)
 
 
 def setup_knn_variables(df_knn, nobs, npred):

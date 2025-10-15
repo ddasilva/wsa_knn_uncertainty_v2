@@ -114,7 +114,7 @@ def get_obs_data(args, dfs_binned):
 
     df_obs = df_obs[["Vp_obs"]]
     df_obs.loc[df_obs.Vp_obs < 0.1, "Vp_obs"] = np.nan
-    df_obs["Vp_obs"] = df_obs["Vp_obs"].resample(args.bin_freq).mean()
+    # df_obs["Vp_obs"] = df_obs["Vp_obs"].resample(args.bin_freq).mean()
 
     return df_obs
 
