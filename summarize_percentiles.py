@@ -42,13 +42,13 @@ def main():
 
 
 def get_score(real, tag, daysahead):
-    percentiles_path = f"data/processed/{tag}/percentiles_R{real:03d}.csv"
+    percentiles_path = f"data/processed/{tag}/percentiles_daysahead{daysahead}_R{real:03d}.csv"
     df = pd.read_csv(percentiles_path)
 
-    percentiles_true = np.array(df["percentile"].tolist() + [100])
+    percentiles_true = np.array(df["TruePercentile"].tolist() + [100])
     score = 0
 
-    percentiles_pred = np.array(df[f"{daysahead} Days"].tolist() + [100])
+    percentiles_pred = np.array(df["ObservedPercentile"].tolist() + [100])
     score += np.trapz((percentiles_true - percentiles_pred) ** 2, percentiles_true)
 
     return score

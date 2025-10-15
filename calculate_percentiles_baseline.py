@@ -1,15 +1,12 @@
 import os
 import sys
 
-import joblib
-from joblib_progress import joblib_progress
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
 
 sys.path.append("..")
-from constants import MIN_DAYSAHEAD, MAX_DAYSAHEAD, BIN_FREQ_PER_DAY
-from grid_definition import define_grid
+from constants import MIN_DAYSAHEAD, MAX_DAYSAHEAD
 
 
 def main():
@@ -17,14 +14,11 @@ def main():
         real=0,
         tag="method2/k20/delta_window4",
         prefix="baseline",
-        do_baseline=True,
         verbose=1,
     )
 
 
-def percentile_analysis_baseline(
-    real, tag=None, prefix=None, verbose=0, do_baseline=False
-):
+def percentile_analysis_baseline(real, tag=None, prefix=None, verbose=1):
     # Return if already processed -----------------------------------------------
     prefix = prefix or ""
     out_file = f"data/processed/{prefix}/percentiles_R{real:03d}.csv"
@@ -54,10 +48,9 @@ def percentile_analysis_baseline(
         if verbose:
             print(colname)
 
-        i = BIN_FREQ_PER_DAY * daysahead - 1
         baseline_sigma = np.sqrt(
             np.mean(
-                np.square(dfs[daysahead][f"Vp_pred{i}"] - dfs[daysahead][f"Vp_obs{i}"])
+                np.square(dfs[daysahead]["forward_Vp_pred"] - dfs[daysahead]["forward_Vp_obs"])
             )
         )
 
@@ -65,11 +58,9 @@ def percentile_analysis_baseline(
             records[colname, percentile] = []
 
             for _, row in dfs[daysahead].iterrows():
-                Vp_pred = row[f"Vp_pred{i}"]
-                Vp_obs = row[f"Vp_obs{i}"]
-                sigma = baseline_sigma
-
-                left, right = norm(loc=Vp_pred, scale=sigma).interval(percentile / 100)
+                Vp_pred = row["forward_Vp_pred"]
+                Vp_obs = row["forward_Vp_obs"]
+                left, right = norm(loc=Vp_pred, scale=baseline_sigma).interval(percentile / 100)
 
                 records[colname, percentile].append(
                     bool(Vp_obs > left and Vp_obs < right)

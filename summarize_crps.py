@@ -48,8 +48,7 @@ def get_score(real, tag, daysahead):
         f"data/processed/{tag}/processed_daysahead{daysahead}_R{real:03d}.csv"
     )
 
-    i = BIN_FREQ_PER_DAY * daysahead - 1
-    score = df[f"crps{i}"].mean()
+    score = df[f"forward_crps"].mean()
     # score = np.median(df[f'crps{i}'])
 
     return score

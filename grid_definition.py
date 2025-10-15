@@ -12,7 +12,7 @@ def define_grid():
 
     for k in range(5, 55, 5):
         for method in ["method2"]:
-            for delta_window in [4]:
+            for delta_window in range(0, 4 * BIN_FREQ_PER_DAY, 1):
                 for daysahead in range(MIN_DAYSAHEAD, MAX_DAYSAHEAD + 1):
                     tag = f"{method}/k{k}/delta_window{delta_window}"
                     grid.append((k, method, delta_window, daysahead, tag))

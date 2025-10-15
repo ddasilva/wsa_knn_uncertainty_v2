@@ -179,6 +179,7 @@ class KnnUncertaintyDataset:
 
             for time in [times[0], times[-1]]:
                 if (
+                    len(self.before_times[ind]) > 0 and 
                     abs(self.before_times[ind][0] - time)
                     < VALIDATION_CLOSENESS_THROWOUT
                 ):
