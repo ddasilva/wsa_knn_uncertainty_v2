@@ -5,7 +5,8 @@ import joblib
 from joblib_progress import joblib_progress
 import numpy as np
 import pandas as pd
-from scipy.stats import norm
+from scipy.stats import norm, skewnorm
+from tqdm import tqdm
 
 sys.path.append("..")
 from constants import MIN_DAYSAHEAD, MAX_DAYSAHEAD
@@ -14,8 +15,9 @@ from grid_definition import define_grid
 
 def main():
     # Test Code
-    #percentile_analysis(real=0, tag="test", prefix="test")
-
+    #percentile_analysis(real=0, daysahead=3, tag="test", prefix="test", verbose=1)
+    #return
+    
     # Grid Search --------------------------------
     tasks = []
     items = set()
@@ -61,17 +63,26 @@ def percentile_analysis(real, daysahead, tag=None, prefix=None, verbose=0):
     records = {}
 
     for daysahead, colname in daysahead_cols.items():
-        if verbose:
-            print(colname)
-
         for percentile in percentiles:
             records[colname, percentile] = []
 
-        for _, row in df.iterrows():
+        rows = list(df.iterrows())
+        if verbose:
+            iterator = tqdm(rows)
+        else:
+            iterator = rows
+            
+        for _, row in iterator:
             Vp_pred = row["forward_Vp_pred"]
             Vp_obs = row["forward_Vp_obs"]
+            mean = row["forward_mean"]
             sigma = row["forward_sigma"]
-            dist = norm(loc=Vp_pred, scale=sigma)
+            skew = row["forward_skew"]
+
+            if np.isnan(skew):
+                dist = norm(loc=Vp_pred+mean, scale=sigma)
+            else:
+                dist = skewnorm(skew, loc=Vp_pred+mean, scale=sigma)
 
             for percentile in percentiles:
                 left, right = dist.interval(percentile / 100)

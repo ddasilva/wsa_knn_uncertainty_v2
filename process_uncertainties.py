@@ -18,8 +18,8 @@ from grid_definition import define_grid
 
 def main():
     # Test code -------------------------------------------------------
-    # do_processing(real=0, daysahead=3, method='method2', tag='test', k=20, delta_window=4, verbose=1)
-    # return
+    #do_processing(real=0, daysahead=3, method='skew_gaussian', tag='test', k=100, delta_window=4, verbose=1)
+    #return
 
     # Grid search calibration ----------------------------------------
     tasks = []
@@ -105,7 +105,7 @@ def do_processing(real, daysahead, method, tag, k, delta_window, verbose=1):
         Vp_obs = df_dataset.Vp_obs.iloc[i : i + delta_window]
         Vp_pred = df_dataset.Vp_pred.iloc[i : i + knn_dataset.npred]
 
-        sigma_time, sigma = util_wsa_uncertainty.calculate_uncertainty_gaussian(
+        sigma_time, mean, sigma, skew = util_wsa_uncertainty.calculate_uncertainty_gaussian(
             knn_dataset=knn_dataset,
             times=times,
             Vp_pred=Vp_pred,
@@ -119,14 +119,16 @@ def do_processing(real, daysahead, method, tag, k, delta_window, verbose=1):
         current_time = df_dataset.index[i + delta_window]
         Vp_pred_nom = df_dataset.Vp_pred.iloc[i + knn_dataset.npred]
         Vp_obs_nom = df_dataset.Vp_obs.iloc[i + knn_dataset.npred]
-        crps = ps.crps_gaussian(Vp_obs_nom, mu=Vp_pred_nom, sig=sigma)
+        crps = ps.crps_gaussian(Vp_obs_nom, mu=Vp_pred_nom+mean, sig=sigma)
 
         df_row = [
             current_time,
             sigma_time,
             Vp_pred_nom,
             Vp_obs_nom,
+            mean,
             sigma,
+            skew,
             crps,
         ]
 
@@ -138,7 +140,9 @@ def do_processing(real, daysahead, method, tag, k, delta_window, verbose=1):
         "forward_time",
         "forward_Vp_pred",
         "forward_Vp_obs",
+        "forward_mean", 
         "forward_sigma",
+        "forward_skew",
         "forward_crps",
     ]
 

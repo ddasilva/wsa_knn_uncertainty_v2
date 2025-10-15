@@ -6,6 +6,8 @@ import os
 import numpy as np
 import pandas as pd
 from scipy.spatial import KDTree
+from scipy.stats import skewnorm
+from scipy.optimize import minimize
 from constants import BIN_FREQ, BIN_FREQ_PER_DAY, DELTA_WINDOW
 
 # Path to WSA_DATA directory
@@ -27,6 +29,7 @@ DEFAULT_K = 50
 INFLATE_K = {
     (0, 35): 500,
     (35, 50): 1000,
+    (50, 100): 2000,
 }
 
 
@@ -36,7 +39,7 @@ def calculate_uncertainty_gaussian(
     Vp_pred,
     Vp_obs,
     daysahead,
-    method="method1",
+    method="gaussian2",
     k=DEFAULT_K,
     return_neighbors=False,
     verbose=1,
@@ -65,28 +68,53 @@ def calculate_uncertainty_gaussian(
 
     assert len(neighbors) > 0
 
-    weights = np.array([1 / nbr.distance for nbr in neighbors])
+    weights = np.array([1 / nbr.distance**2 for nbr in neighbors])
 
     # Calculate sigma
-    if method == "method1":
-        errors = np.array([nbr.after_obs[-1] - Vp_pred.iloc[-1] for nbr in neighbors])
-    elif method == "method2":
-        errors = np.array([nbr.after_obs[-1] - nbr.after_pred[-1] for nbr in neighbors])
-    else:
-        raise RuntimeError(f"Uknown method {method}")
-
+    errors = np.array([nbr.after_obs[-1] - nbr.after_pred[-1] for nbr in neighbors])
     mask = np.isfinite(weights) & np.isfinite(errors)
-    variance = np.sum(weights[mask] * np.square(errors[mask])) / weights[mask].sum()
-    sigma = np.sqrt(variance)
-    sigma_time = times[-1]
+    forward_time = times[-1]
 
+    if method == 'gaussian':
+        variance = np.sum(weights[mask] * np.square(errors[mask])) / weights[mask].sum()
+        forward_mean = np.sum(weights[mask] * errors[mask]) / weights[mask].sum()
+        forward_sigma = np.sqrt(variance)
+        forward_skew = np.nan
+
+    elif method == 'skew_gaussian':
+        #forward_skew, forward_mean, forward_sigma = skewnorm.fit(errors[mask])
+        forward_skew, forward_mean, forward_sigma = weighted_skewnorm_fit(errors[mask], weights[mask])
+    else:
+        raise RuntimeError(f'Unknown method {method}')
+    
     # Return
     if return_neighbors:
-        return_value = (sigma_time, sigma, neighbors)
+        return_value = (forward_time, forward_mean, forward_sigma, forward_skew, neighbors)
     else:
-        return_value = (sigma_time, sigma)
+        return_value = (forward_time, forward_mean, forward_sigma, forward_skew)
 
     return return_value
+
+
+def weighted_skewnorm_fit(data, weights):
+    # Normalize weights to sum to 1 (optional but helps)
+    weights = np.array(weights, dtype=float)
+    weights /= weights.sum()
+    
+    # Negative log-likelihood function
+    def nll(params):
+        a, loc, scale = params
+        if scale <= 0:
+            return np.inf
+        pdf_vals = skewnorm.pdf(data, a, loc=loc, scale=scale)
+        # Add small epsilon to avoid log(0)
+        return -np.sum(weights * np.log(pdf_vals + 1e-12))
+    
+    # Initial guess (use unweighted fit as a starting point)
+    a0, loc0, scale0 = skewnorm.fit(data)
+    res = minimize(nll, [a0, loc0, scale0], method='L-BFGS-B',
+                   bounds=[(-20, 20), (None, None), (1e-6, None)])
+    return res.x  # returns [a, loc, scale]
 
 
 @dataclass

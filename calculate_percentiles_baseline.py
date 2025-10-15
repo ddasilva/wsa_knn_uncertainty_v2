@@ -1,6 +1,8 @@
 import os
 import sys
 
+import joblib
+from joblib_progress import joblib_progress
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
@@ -10,18 +12,26 @@ from constants import MIN_DAYSAHEAD, MAX_DAYSAHEAD
 
 
 def main():
-    percentile_analysis_baseline(
-        real=0,
-        tag="method2/k20/delta_window4",
-        prefix="baseline",
-        verbose=1,
-    )
+    tasks = []
 
+    for daysahead in range(MIN_DAYSAHEAD, MAX_DAYSAHEAD + 1):
+        tasks.append(joblib.delayed(percentile_analysis_baseline)(
+            real=0,
+            daysahead=daysahead,
+            tag="gaussian2/k20/delta_window4",
+            verbose=0,
+        ))
 
-def percentile_analysis_baseline(real, tag=None, prefix=None, verbose=1):
+    n_jobs = 7
+    
+    with joblib_progress("Calculating baseline percentiles...", total=len(tasks)):
+        joblib.Parallel(n_jobs=n_jobs, verbose=1000)(tasks)
+
+        
+def percentile_analysis_baseline(real, daysahead, tag=None, prefix=None, verbose=1):
     # Return if already processed -----------------------------------------------
     prefix = prefix or ""
-    out_file = f"data/processed/{prefix}/percentiles_R{real:03d}.csv"
+    out_file = f"data/processed/baseline/percentiles_daysahead{daysahead}_R{real:03d}.csv"
 
     # if os.path.exists(out_file):
     #    return
@@ -91,7 +101,8 @@ def percentile_analysis_baseline(real, tag=None, prefix=None, verbose=1):
 
     df_output.to_csv(out_file, index=False)
 
-    print(f"Wrote to {out_file}")
+    if verbose:
+        print(f"Wrote to {out_file}")
 
 
 if __name__ == "__main__":
