@@ -15,9 +15,9 @@ from grid_definition import define_grid
 
 def main():
     # Test Code
-    #percentile_analysis(real=0, daysahead=3, tag="test", prefix="test", verbose=1)
-    #return
-    
+    # percentile_analysis(real=0, daysahead=3, tag="test", prefix="test", verbose=1)
+    # return
+
     # Grid Search --------------------------------
     tasks = []
     items = set()
@@ -36,7 +36,7 @@ def main():
         )
 
     n_jobs = 70
-    
+
     with joblib_progress("Calculating percentiles...", total=len(tasks)):
         joblib.Parallel(n_jobs=n_jobs, verbose=1000)(tasks)
 
@@ -44,7 +44,9 @@ def main():
 def percentile_analysis(real, daysahead, tag=None, prefix=None, verbose=0):
     # Return if already processed -----------------------------------------------
     prefix = prefix or ""
-    out_file = f"data/processed/{prefix}/percentiles_daysahead{daysahead}_R{real:03d}.csv"
+    out_file = (
+        f"data/processed/{prefix}/percentiles_daysahead{daysahead}_R{real:03d}.csv"
+    )
 
     if os.path.exists(out_file):
         return
@@ -71,7 +73,7 @@ def percentile_analysis(real, daysahead, tag=None, prefix=None, verbose=0):
             iterator = tqdm(rows)
         else:
             iterator = rows
-            
+
         for _, row in iterator:
             Vp_pred = row["forward_Vp_pred"]
             Vp_obs = row["forward_Vp_obs"]
@@ -80,9 +82,9 @@ def percentile_analysis(real, daysahead, tag=None, prefix=None, verbose=0):
             skew = row["forward_skew"]
 
             if np.isnan(skew):
-                dist = norm(loc=Vp_pred+mean, scale=sigma)
+                dist = norm(loc=Vp_pred + mean, scale=sigma)
             else:
-                dist = skewnorm(skew, loc=Vp_pred+mean, scale=sigma)
+                dist = skewnorm(skew, loc=Vp_pred + mean, scale=sigma)
 
             for percentile in percentiles:
                 left, right = dist.interval(percentile / 100)

@@ -15,23 +15,27 @@ def main():
     tasks = []
 
     for daysahead in range(MIN_DAYSAHEAD, MAX_DAYSAHEAD + 1):
-        tasks.append(joblib.delayed(percentile_analysis_baseline)(
-            real=0,
-            daysahead=daysahead,
-            tag="gaussian2/k20/delta_window4",
-            verbose=0,
-        ))
+        tasks.append(
+            joblib.delayed(percentile_analysis_baseline)(
+                real=0,
+                daysahead=daysahead,
+                tag="gaussian2/k20/delta_window4",
+                verbose=0,
+            )
+        )
 
     n_jobs = 7
-    
+
     with joblib_progress("Calculating baseline percentiles...", total=len(tasks)):
         joblib.Parallel(n_jobs=n_jobs, verbose=1000)(tasks)
 
-        
+
 def percentile_analysis_baseline(real, daysahead, tag=None, prefix=None, verbose=1):
     # Return if already processed -----------------------------------------------
     prefix = prefix or ""
-    out_file = f"data/processed/baseline/percentiles_daysahead{daysahead}_R{real:03d}.csv"
+    out_file = (
+        f"data/processed/baseline/percentiles_daysahead{daysahead}_R{real:03d}.csv"
+    )
 
     # if os.path.exists(out_file):
     #    return
@@ -60,7 +64,9 @@ def percentile_analysis_baseline(real, daysahead, tag=None, prefix=None, verbose
 
         baseline_sigma = np.sqrt(
             np.mean(
-                np.square(dfs[daysahead]["forward_Vp_pred"] - dfs[daysahead]["forward_Vp_obs"])
+                np.square(
+                    dfs[daysahead]["forward_Vp_pred"] - dfs[daysahead]["forward_Vp_obs"]
+                )
             )
         )
 
@@ -70,7 +76,9 @@ def percentile_analysis_baseline(real, daysahead, tag=None, prefix=None, verbose
             for _, row in dfs[daysahead].iterrows():
                 Vp_pred = row["forward_Vp_pred"]
                 Vp_obs = row["forward_Vp_obs"]
-                left, right = norm(loc=Vp_pred, scale=baseline_sigma).interval(percentile / 100)
+                left, right = norm(loc=Vp_pred, scale=baseline_sigma).interval(
+                    percentile / 100
+                )
 
                 records[colname, percentile].append(
                     bool(Vp_obs > left and Vp_obs < right)

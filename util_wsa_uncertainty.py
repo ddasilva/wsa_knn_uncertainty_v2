@@ -75,21 +75,29 @@ def calculate_uncertainty_gaussian(
     mask = np.isfinite(weights) & np.isfinite(errors)
     forward_time = times[-1]
 
-    if method == 'gaussian':
+    if method == "gaussian":
         variance = np.sum(weights[mask] * np.square(errors[mask])) / weights[mask].sum()
         forward_mean = np.sum(weights[mask] * errors[mask]) / weights[mask].sum()
         forward_sigma = np.sqrt(variance)
         forward_skew = np.nan
 
-    elif method == 'skew_gaussian':
-        #forward_skew, forward_mean, forward_sigma = skewnorm.fit(errors[mask])
-        forward_skew, forward_mean, forward_sigma = weighted_skewnorm_fit(errors[mask], weights[mask])
+    elif method == "skew_gaussian":
+        # forward_skew, forward_mean, forward_sigma = skewnorm.fit(errors[mask])
+        forward_skew, forward_mean, forward_sigma = weighted_skewnorm_fit(
+            errors[mask], weights[mask]
+        )
     else:
-        raise RuntimeError(f'Unknown method {method}')
-    
+        raise RuntimeError(f"Unknown method {method}")
+
     # Return
     if return_neighbors:
-        return_value = (forward_time, forward_mean, forward_sigma, forward_skew, neighbors)
+        return_value = (
+            forward_time,
+            forward_mean,
+            forward_sigma,
+            forward_skew,
+            neighbors,
+        )
     else:
         return_value = (forward_time, forward_mean, forward_sigma, forward_skew)
 
@@ -100,7 +108,7 @@ def weighted_skewnorm_fit(data, weights):
     # Normalize weights to sum to 1 (optional but helps)
     weights = np.array(weights, dtype=float)
     weights /= weights.sum()
-    
+
     # Negative log-likelihood function
     def nll(params):
         a, loc, scale = params
@@ -109,11 +117,15 @@ def weighted_skewnorm_fit(data, weights):
         pdf_vals = skewnorm.pdf(data, a, loc=loc, scale=scale)
         # Add small epsilon to avoid log(0)
         return -np.sum(weights * np.log(pdf_vals + 1e-12))
-    
+
     # Initial guess (use unweighted fit as a starting point)
     a0, loc0, scale0 = skewnorm.fit(data)
-    res = minimize(nll, [a0, loc0, scale0], method='L-BFGS-B',
-                   bounds=[(-20, 20), (None, None), (1e-6, None)])
+    res = minimize(
+        nll,
+        [a0, loc0, scale0],
+        method="L-BFGS-B",
+        bounds=[(-20, 20), (None, None), (1e-6, None)],
+    )
     return res.x  # returns [a, loc, scale]
 
 
@@ -207,8 +219,8 @@ class KnnUncertaintyDataset:
 
             for time in [times[0], times[-1]]:
                 if (
-                    len(self.before_times[ind]) > 0 and 
-                    abs(self.before_times[ind][0] - time)
+                    len(self.before_times[ind]) > 0
+                    and abs(self.before_times[ind][0] - time)
                     < VALIDATION_CLOSENESS_THROWOUT
                 ):
                     skip = True

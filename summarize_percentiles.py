@@ -42,7 +42,9 @@ def main():
 
 
 def get_score(real, tag, daysahead):
-    percentiles_path = f"data/processed/{tag}/percentiles_daysahead{daysahead}_R{real:03d}.csv"
+    percentiles_path = (
+        f"data/processed/{tag}/percentiles_daysahead{daysahead}_R{real:03d}.csv"
+    )
     df = pd.read_csv(percentiles_path)
 
     percentiles_true = np.array(df["TruePercentile"].tolist() + [100])
