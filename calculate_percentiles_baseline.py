@@ -51,7 +51,7 @@ def percentile_analysis_baseline(real, daysahead, prefix=None, verbose=1):
             daysahead=daysahead,
         )
         dfs[i] = pd.read_csv(knn_dataset.file_name, index_col=0).dropna()
-        
+
     if verbose:
         print(dfs[1].head().to_string())
 
@@ -65,11 +65,7 @@ def percentile_analysis_baseline(real, daysahead, prefix=None, verbose=1):
             print(colname)
 
         baseline_sigma = np.sqrt(
-            np.mean(
-                np.square(
-                    dfs[daysahead]["Vp_pred"] - dfs[daysahead]["Vp_obs"]
-                )
-            )
+            np.mean(np.square(dfs[daysahead]["Vp_pred"] - dfs[daysahead]["Vp_obs"]))
         )
 
         for percentile in percentiles:

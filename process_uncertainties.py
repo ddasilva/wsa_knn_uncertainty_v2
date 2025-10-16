@@ -18,7 +18,7 @@ from grid_definition import define_grid
 
 def main():
     # Test code -------------------------------------------------------
-    # do_processing(real=0, daysahead=3, method='skew_gaussian', tag='test', k=100, delta_window=4, verbose=1)
+    # do_processing(real=0, daysahead=3, method='skew_gaussian', tag='test', k=100, delta_window=8, verbose=1)
     # return
 
     # Grid search calibration ----------------------------------------

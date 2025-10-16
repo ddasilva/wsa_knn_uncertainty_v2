@@ -77,16 +77,14 @@ def calculate_uncertainty_gaussian(
 
     if method == "gaussian":
         variance = np.sum(weights[mask] * np.square(errors[mask])) / weights[mask].sum()
-        #forward_mean = np.sum(weights[mask] * errors[mask]) / weights[mask].sum()
+        # forward_mean = np.sum(weights[mask] * errors[mask]) / weights[mask].sum()
         forward_mean = 0.0
         forward_sigma = np.sqrt(variance)
         forward_skew = np.nan
     elif method == "skew_gaussian":
         # forward_skew, forward_mean, forward_sigma = skewnorm.fit(errors[mask])
         forward_mean = 0.0
-        forward_skew, forward_sigma = weighted_skewnorm_fit(
-            errors[mask], weights[mask]
-        )
+        forward_skew, forward_sigma = weighted_skewnorm_fit(errors[mask], weights[mask])
     else:
         raise RuntimeError(f"Unknown method {method}")
 
@@ -103,6 +101,7 @@ def calculate_uncertainty_gaussian(
         return_value = (forward_time, forward_mean, forward_sigma, forward_skew)
 
     return return_value
+
 
 # def weighted_skewnorm_fit(data, weights):
 #     # Normalize weights to sum to 1 (optional but helps)
@@ -201,7 +200,7 @@ class KnnUncertaintyDataset:
             self.after_pred,
         ) = unpack_knn_variables(self.X, self.Xtime, self.y, self.nobs, self.npred)
 
-    def lookup_neighbors(self, times, Vp_obs, Vp_pred, k=DEFAULT_K):
+    def lookup_neighbors(self, times, Vp_obs, Vp_pred, k=DEFAULT_K, prune=False):
         """Lookup Neighbors
 
         Args
@@ -216,23 +215,29 @@ class KnnUncertaintyDataset:
         assert len(Vp_pred) == self.npred
         assert len(times) == len(Vp_pred)
 
-        # Do query of KDTree
+        # Setup query target for the KDTree
         query = np.zeros(self.nobs + self.npred)
         query[: self.nobs] = Vp_obs
         query[self.nobs :] = Vp_pred
 
-        inflate_k = list(INFLATE_K.values())[-1]
+        # Branch base on pruning (emove neighbors that are very close to
+        # eachother in time (e.g., within a carrington of eachother).
+        if prune:
+            # If pruning, need to inflate the K w query for because
+            # we will have to remove some members
+            inflate_k = list(INFLATE_K.values())[-1]
 
-        for (start, stop), value in INFLATE_K.items():
-            if start <= k <= stop:
-                inflate_k = value
-                break
+            for (start, stop), value in INFLATE_K.items():
+                if start <= k <= stop:
+                    inflate_k = value
+                    break
 
-        distances, inds = self.tree.query(query, k=inflate_k)
+            distances, inds = self.tree.query(query, k=inflate_k)
+            distances_pruned, inds_pruned = prune_inds(distances, inds)
+        else:
+            distances, inds = self.tree.query(query, k=2 * k)
 
-        # Remove neighbors that are very close to eachother in time (e.g., with
-        # carrington of eachother)
-        distances_pruned, inds_pruned = prune_inds(distances, inds)
+            distances_pruned, inds_pruned = distances, inds
 
         # Collect neighbors
         neighbors = []

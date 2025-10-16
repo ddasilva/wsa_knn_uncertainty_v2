@@ -51,7 +51,7 @@ def get_score(real, tag, daysahead):
     score = 0
 
     percentiles_pred = np.array(df["ObservedPercentile"].tolist() + [100])
-    score += np.trapz((percentiles_true - percentiles_pred) ** 2, percentiles_true)
+    score += np.trapz(np.abs(percentiles_true - percentiles_pred), percentiles_true)
 
     return score
 
