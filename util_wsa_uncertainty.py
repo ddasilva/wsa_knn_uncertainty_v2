@@ -8,7 +8,10 @@ import pandas as pd
 from scipy.spatial import KDTree
 from scipy.stats import skewnorm
 from scipy.optimize import minimize
-from constants import BIN_FREQ, BIN_FREQ_PER_DAY, DELTA_WINDOW
+from constants import (
+    BIN_FREQ, BIN_FREQ_PER_DAY, DELTA_WINDOW
+    DEFAULT_K, DEFAULT_METHOD,
+)
 
 # Path to WSA_DATA directory
 WSA_DATA_PATH = "data/WSA_DATA"
@@ -20,10 +23,6 @@ PRUNE_THRESHOLD = 12
 # Avoid using k-NN items within this timedelta of the target, for validation
 # and data leakage issues
 VALIDATION_CLOSENESS_THROWOUT = timedelta(days=27)
-
-# Default K for nearest neighbor search (prior to prunining).
-DEFAULT_K = 50
-
 
 # Query this many neighbors and then subset to target k after pruning
 INFLATE_K = {
@@ -39,7 +38,7 @@ def calculate_uncertainty_gaussian(
     Vp_pred,
     Vp_obs,
     daysahead,
-    method="gaussian",
+    method=DEFAULT_METHOD,
     k=DEFAULT_K,
     return_neighbors=False,
     verbose=1,
@@ -51,8 +50,11 @@ def calculate_uncertainty_gaussian(
       Vp_pred: array of predictions, length knn_dataset.npred
       Vp_obs: array of observations, length knn_dataset.nobs
     Return
-      sigma
-    """
+      forward_time
+      forward_loc
+      forward_scale
+      forward_shape
+     """
     # Checks on function parameters
     assert len(times) == knn_dataset.npred
     assert len(Vp_pred) == knn_dataset.npred

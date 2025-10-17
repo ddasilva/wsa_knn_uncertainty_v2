@@ -6,7 +6,13 @@ MAX_DAYSAHEAD = 7
 N_REALS = 12
 
 # Default size of observation window (4 per day * 3 days)
-DELTA_WINDOW = 4
+DELTA_WINDOW = 8
+
+# Default gaussian method
+DEFAULT_METHOD = "skew_gaussian"
+
+# Default number of neighbors
+DEFAULT_K = 200
 
 # Frequency and per day
 BIN_FREQ = "6h"
