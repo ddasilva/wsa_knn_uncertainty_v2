@@ -77,7 +77,7 @@ def calculate_uncertainty_gaussian(
     if method == "gaussian":
         mask = np.isfinite(weights) & np.isfinite(errors)
         variance = np.sum(weights[mask] * np.square(errors[mask])) / weights[mask].sum()
-        #forward_mean = np.sum(weights[mask] * errors[mask]) / weights[mask].sum()
+        # forward_mean = np.sum(weights[mask] * errors[mask]) / weights[mask].sum()
         forward_loc = Vp_pred.iloc[-1]
         forward_scale = np.sqrt(variance)
         forward_shape = np.nan

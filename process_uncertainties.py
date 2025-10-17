@@ -19,8 +19,8 @@ from grid_definition import define_grid
 
 def main():
     # Test code -------------------------------------------------------
-    #do_processing(real=0, daysahead=3, method='skew_gaussian', tag='test', k=200, delta_window=8, verbose=1)
-    #return
+    # do_processing(real=0, daysahead=3, method='skew_gaussian', tag='test', k=200, delta_window=8, verbose=1)
+    # return
 
     # Grid search calibration ----------------------------------------
     tasks = []
@@ -127,9 +127,9 @@ def do_processing(real, daysahead, method, tag, k, delta_window, verbose=1):
             crps = ps.crps_gaussian(Vp_obs_nom, mu=loc, sig=scale)
         else:
             crps = np.nan
-            #dist = skewnorm(shape, loc=loc, scale=scale)
-            #crps = ps.crps_quadrature(Vp_obs_nom, dist)
-        
+            # dist = skewnorm(shape, loc=loc, scale=scale)
+            # crps = ps.crps_quadrature(Vp_obs_nom, dist)
+
         df_row = [
             current_time,
             forward_time,
