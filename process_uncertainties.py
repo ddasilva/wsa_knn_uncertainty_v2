@@ -7,6 +7,7 @@ from joblib_progress import joblib_progress
 import numpy as np
 import pandas as pd
 import properscoring as ps
+from scipy.stats import skewnorm
 from termcolor import colored
 from tqdm import tqdm
 
@@ -18,8 +19,8 @@ from grid_definition import define_grid
 
 def main():
     # Test code -------------------------------------------------------
-    # do_processing(real=0, daysahead=3, method='skew_gaussian', tag='test', k=100, delta_window=8, verbose=1)
-    # return
+    #do_processing(real=0, daysahead=3, method='skew_gaussian', tag='test', k=200, delta_window=8, verbose=1)
+    #return
 
     # Grid search calibration ----------------------------------------
     tasks = []
@@ -105,7 +106,7 @@ def do_processing(real, daysahead, method, tag, k, delta_window, verbose=1):
         Vp_obs = df_dataset.Vp_obs.iloc[i : i + delta_window]
         Vp_pred = df_dataset.Vp_pred.iloc[i : i + knn_dataset.npred]
 
-        sigma_time, mean, sigma, skew = (
+        forward_time, loc, scale, shape = (
             util_wsa_uncertainty.calculate_uncertainty_gaussian(
                 knn_dataset=knn_dataset,
                 times=times,
@@ -121,16 +122,22 @@ def do_processing(real, daysahead, method, tag, k, delta_window, verbose=1):
         current_time = df_dataset.index[i + delta_window]
         Vp_pred_nom = df_dataset.Vp_pred.iloc[i + knn_dataset.npred]
         Vp_obs_nom = df_dataset.Vp_obs.iloc[i + knn_dataset.npred]
-        crps = ps.crps_gaussian(Vp_obs_nom, mu=Vp_pred_nom + mean, sig=sigma)
 
+        if np.isnan(shape):
+            crps = ps.crps_gaussian(Vp_obs_nom, mu=loc, sig=scale)
+        else:
+            crps = np.nan
+            #dist = skewnorm(shape, loc=loc, scale=scale)
+            #crps = ps.crps_quadrature(Vp_obs_nom, dist)
+        
         df_row = [
             current_time,
-            sigma_time,
+            forward_time,
             Vp_pred_nom,
             Vp_obs_nom,
-            mean,
-            sigma,
-            skew,
+            loc,
+            scale,
+            shape,
             crps,
         ]
 
@@ -142,9 +149,9 @@ def do_processing(real, daysahead, method, tag, k, delta_window, verbose=1):
         "forward_time",
         "forward_Vp_pred",
         "forward_Vp_obs",
-        "forward_mean",
-        "forward_sigma",
-        "forward_skew",
+        "forward_loc",
+        "forward_scale",
+        "forward_shape",
         "forward_crps",
     ]
 

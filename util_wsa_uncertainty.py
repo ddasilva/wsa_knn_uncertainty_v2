@@ -72,19 +72,21 @@ def calculate_uncertainty_gaussian(
 
     # Calculate sigma
     errors = np.array([nbr.after_obs[-1] - nbr.after_pred[-1] for nbr in neighbors])
-    mask = np.isfinite(weights) & np.isfinite(errors)
     forward_time = times[-1]
 
     if method == "gaussian":
+        mask = np.isfinite(weights) & np.isfinite(errors)
         variance = np.sum(weights[mask] * np.square(errors[mask])) / weights[mask].sum()
-        # forward_mean = np.sum(weights[mask] * errors[mask]) / weights[mask].sum()
-        forward_mean = 0.0
-        forward_sigma = np.sqrt(variance)
-        forward_skew = np.nan
+        #forward_mean = np.sum(weights[mask] * errors[mask]) / weights[mask].sum()
+        forward_loc = Vp_pred.iloc[-1]
+        forward_scale = np.sqrt(variance)
+        forward_shape = np.nan
     elif method == "skew_gaussian":
-        # forward_skew, forward_mean, forward_sigma = skewnorm.fit(errors[mask])
-        forward_mean = 0.0
-        forward_skew, forward_sigma = weighted_skewnorm_fit(errors[mask], weights[mask])
+        values = errors + Vp_pred.iloc[-1]
+        mask = np.isfinite(weights) & np.isfinite(values)
+        forward_shape, forward_loc, forward_scale = weighted_skewnorm_fit(
+            values[mask], weights[mask]
+        )
     else:
         raise RuntimeError(f"Unknown method {method}")
 
@@ -92,43 +94,43 @@ def calculate_uncertainty_gaussian(
     if return_neighbors:
         return_value = (
             forward_time,
-            forward_mean,
-            forward_sigma,
-            forward_skew,
+            forward_loc,
+            forward_scale,
+            forward_shape,
             neighbors,
         )
     else:
-        return_value = (forward_time, forward_mean, forward_sigma, forward_skew)
+        return_value = (forward_time, forward_loc, forward_scale, forward_shape)
 
     return return_value
 
 
-# def weighted_skewnorm_fit(data, weights):
-#     # Normalize weights to sum to 1 (optional but helps)
-#     weights = np.array(weights, dtype=float)
-#     weights /= weights.sum()
-
-#     # Negative log-likelihood function
-#     def nll(params):
-#         a, loc, scale = params
-#         if scale <= 0:
-#             return np.inf
-#         pdf_vals = skewnorm.pdf(data, a, loc=loc, scale=scale)
-#         # Add small epsilon to avoid log(0)
-#         return -np.sum(weights * np.log(pdf_vals + 1e-12))
-
-#     # Initial guess (use unweighted fit as a starting point)
-#     a0, loc0, scale0 = skewnorm.fit(data)
-#     res = minimize(
-#         nll,
-#         [a0, loc0, scale0],
-#         method="L-BFGS-B",
-#         bounds=[(-20, 20), (None, None), (1e-6, None)],
-#     )
-#     return res.x  # returns [a, loc, scale]
-
-
 def weighted_skewnorm_fit(data, weights):
+    # Normalize weights to sum to 1 (optional but helps)
+    weights = np.array(weights, dtype=float)
+    weights /= weights.sum()
+
+    # Negative log-likelihood function
+    def nll(params):
+        a, loc, scale = params
+        if scale <= 0:
+            return np.inf
+        pdf_vals = skewnorm.pdf(data, a, loc=loc, scale=scale)
+        # Add small epsilon to avoid log(0)
+        return -np.sum(weights * np.log(pdf_vals + 1e-12))
+
+    # Initial guess (use unweighted fit as a starting point)
+    a0, loc0, scale0 = skewnorm.fit(data)
+    res = minimize(
+        nll,
+        [a0, loc0, scale0],
+        method="L-BFGS-B",
+        bounds=[(-20, 20), (None, None), (1e-6, None)],
+    )
+    return res.x  # returns [a, loc, scale]
+
+
+def weighted_skewnorm_fit_noloc(data, weights):
     # Normalize weights to sum to 1 (optional but helps)
     weights = np.array(weights, dtype=float)
     weights /= weights.sum()

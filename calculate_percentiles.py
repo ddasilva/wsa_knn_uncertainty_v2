@@ -15,8 +15,8 @@ from grid_definition import define_grid
 
 def main():
     # Test Code
-    # percentile_analysis(real=0, daysahead=3, tag="test", prefix="test", verbose=1)
-    # return
+    #percentile_analysis(real=0, daysahead=3, tag="test", prefix="test", verbose=1)
+    #return
 
     # Grid Search --------------------------------
     tasks = []
@@ -75,16 +75,15 @@ def percentile_analysis(real, daysahead, tag=None, prefix=None, verbose=0):
             iterator = rows
 
         for _, row in iterator:
-            Vp_pred = row["forward_Vp_pred"]
             Vp_obs = row["forward_Vp_obs"]
-            mean = row["forward_mean"]
-            sigma = row["forward_sigma"]
-            skew = row["forward_skew"]
+            loc = row["forward_loc"]
+            scale = row["forward_scale"]
+            shape = row["forward_shape"]
 
-            if np.isnan(skew):
-                dist = norm(loc=Vp_pred + mean, scale=sigma)
+            if np.isnan(shape):
+                dist = norm(loc=loc, scale=scale)
             else:
-                dist = skewnorm(skew, loc=Vp_pred + mean, scale=sigma)
+                dist = skewnorm(shape, loc=loc, scale=scale)
 
             for percentile in percentiles:
                 left, right = dist.interval(percentile / 100)
