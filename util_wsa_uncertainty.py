@@ -9,7 +9,7 @@ from scipy.spatial import KDTree
 from scipy.stats import skewnorm
 from scipy.optimize import minimize
 from constants import (
-    BIN_FREQ, BIN_FREQ_PER_DAY, DELTA_WINDOW
+    BIN_FREQ, BIN_FREQ_PER_DAY, DELTA_WINDOW,
     DEFAULT_K, DEFAULT_METHOD,
 )
 
