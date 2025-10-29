@@ -9,8 +9,11 @@ from scipy.spatial import KDTree
 from scipy.stats import skewnorm
 from scipy.optimize import minimize
 from constants import (
-    BIN_FREQ, BIN_FREQ_PER_DAY, DELTA_WINDOW,
-    DEFAULT_K, DEFAULT_METHOD,
+    BIN_FREQ,
+    BIN_FREQ_PER_DAY,
+    DELTA_WINDOW,
+    DEFAULT_K,
+    DEFAULT_METHOD,
 )
 
 # Path to WSA_DATA directory
@@ -25,10 +28,16 @@ PRUNE_THRESHOLD = 12
 VALIDATION_CLOSENESS_THROWOUT = timedelta(days=27)
 
 # Query this many neighbors and then subset to target k after pruning
-INFLATE_K = {
+INFLATE_K_PRUNE = {
     (0, 35): 500,
     (35, 50): 1000,
     (50, 100): 2500,
+}
+
+INFLATE_K_DEFAULT = {
+    (0, 250): 500,
+    (250, 500): 1000,
+    (500, 1000): 2000,
 }
 
 
@@ -54,7 +63,7 @@ def calculate_uncertainty_gaussian(
       forward_loc
       forward_scale
       forward_shape
-     """
+    """
     # Checks on function parameters
     assert len(times) == knn_dataset.npred
     assert len(Vp_pred) == knn_dataset.npred
@@ -224,23 +233,23 @@ class KnnUncertaintyDataset:
         query[: self.nobs] = Vp_obs
         query[self.nobs :] = Vp_pred
 
+        # If pruning, need to inflate the K w query for because
+        # we will have to remove some members
+        inflate_k_dict = INFLATE_K_PRUNE if prune else INFLATE_K_DEFAULT
+        inflate_k = list(inflate_k_dict.values())[-1]
+
+        for (start, stop), value in inflate_k_dict.items():
+            if start <= k <= stop:
+                inflate_k = value
+                break
+
         # Branch base on pruning (emove neighbors that are very close to
         # eachother in time (e.g., within a carrington of eachother).
+        distances, inds = self.tree.query(query, k=inflate_k)
+
         if prune:
-            # If pruning, need to inflate the K w query for because
-            # we will have to remove some members
-            inflate_k = list(INFLATE_K.values())[-1]
-
-            for (start, stop), value in INFLATE_K.items():
-                if start <= k <= stop:
-                    inflate_k = value
-                    break
-
-            distances, inds = self.tree.query(query, k=inflate_k)
             distances_pruned, inds_pruned = prune_inds(distances, inds)
         else:
-            distances, inds = self.tree.query(query, k=2 * k)
-
             distances_pruned, inds_pruned = distances, inds
 
         # Collect neighbors
