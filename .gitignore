@@ -3,3 +3,4 @@ data/WSA_DATA
 __pycache__
 *~
 [#]*[#]
+plots/*.png
