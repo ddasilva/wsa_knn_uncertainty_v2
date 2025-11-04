@@ -15,14 +15,44 @@ sys.path.append(os.path.join(os.getcwd(), ".."))
 import util_wsa_uncertainty
 
 from grid_definition import define_grid
+from constants import MIN_DAYSAHEAD, MAX_DAYSAHEAD, N_REALS
 
 
 def main():
-    # Test code -------------------------------------------------------
-    # do_processing(real=0, daysahead=3, method='skew_gaussian', tag='test', k=200, delta_window=8, verbose=1)
-    # return
+    main_rfr()
+    # main_grid_search()
 
-    # Grid search calibration ----------------------------------------
+
+def main_rfr():
+    """Run for Record"""
+    delta_window = 2
+    k = 275
+    method = "skew_gaussian"
+    tag = "rfr"
+    tasks = []
+
+    for daysahead in range(MIN_DAYSAHEAD, MAX_DAYSAHEAD + 1):
+        for real in range(N_REALS):
+            tasks.append(
+                joblib.delayed(do_processing)(
+                    real=real,
+                    daysahead=daysahead,
+                    method=method,
+                    tag=tag,
+                    k=k,
+                    delta_window=delta_window,
+                    verbose=0,
+                )
+            )
+
+    n_jobs = 65
+
+    with joblib_progress("Processing RFR...", total=len(tasks)):
+        joblib.Parallel(n_jobs=n_jobs, verbose=1000)(tasks)
+
+
+def main_grid_search():
+    """Grid search calibration"""
     tasks = []
 
     for k, method, delta_window, daysahead, tag in define_grid():
@@ -40,7 +70,7 @@ def main():
 
     n_jobs = 65
 
-    with joblib_progress("Processing Uncetainties...", total=len(tasks)):
+    with joblib_progress("Processing Uncertainties...", total=len(tasks)):
         joblib.Parallel(n_jobs=n_jobs, verbose=1000)(tasks)
 
 
@@ -126,9 +156,20 @@ def do_processing(real, daysahead, method, tag, k, delta_window, verbose=1):
         if np.isnan(shape):
             crps = ps.crps_gaussian(Vp_obs_nom, mu=loc, sig=scale)
         else:
-            crps = np.nan
-            # dist = skewnorm(shape, loc=loc, scale=scale)
-            # crps = ps.crps_quadrature(Vp_obs_nom, dist)
+            # crps = np.nan
+            dist = skewnorm(shape, loc=loc, scale=scale)
+            # try:
+            #    crps = ps.crps_quadrature(Vp_obs_nom, dist)
+            #    print(crps)
+            # except:
+            # Not 100% sure why this sometimes fails, but it is rare. Seems
+            # to be a quadrature issue
+
+            x = np.arange(0, 1200, 1)
+            cdf = dist.cdf(x)
+            ref = np.zeros_like(x)
+            ref[x > Vp_obs_nom] = 1
+            crps = np.trapz(np.square(ref - cdf), x)
 
         df_row = [
             current_time,

@@ -9,16 +9,45 @@ from scipy.stats import norm, skewnorm
 from tqdm import tqdm
 
 sys.path.append("..")
-from constants import MIN_DAYSAHEAD, MAX_DAYSAHEAD
+from constants import MIN_DAYSAHEAD, MAX_DAYSAHEAD, N_REALS
 from grid_definition import define_grid
 
 
 def main():
-    # Test Code
-    # percentile_analysis(real=0, daysahead=3, tag="test", prefix="test", verbose=1)
-    # return
+    main_rfr()
+    # main_grid_search()
 
-    # Grid Search --------------------------------
+
+def main_rfr():
+    """Run for record"""
+    tag = "rfr"
+    tasks = []
+
+    for daysahead in range(MIN_DAYSAHEAD, MAX_DAYSAHEAD + 1):
+        for real in range(N_REALS):
+            tasks.append(
+                joblib.delayed(percentile_analysis)(
+                    real=real,
+                    tag=tag,
+                    daysahead=daysahead,
+                    prefix=tag,
+                )
+            )
+
+    n_jobs = 70
+
+    with joblib_progress("Calculating percentiles...", total=len(tasks)):
+        joblib.Parallel(n_jobs=n_jobs, verbose=1000)(tasks)
+
+
+def main_test():
+    """Test code for development"""
+    percentile_analysis(real=0, daysahead=3, tag="test", prefix="test", verbose=1)
+    return
+
+
+def main_grid_search():
+    """Grid search calibration"""
     tasks = []
     items = set()
 
